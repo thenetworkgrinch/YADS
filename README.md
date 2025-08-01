@@ -1,6 +1,6 @@
 # Yet Another Driver Station (YADS)
 
-[![Build Status](https://github.com/thenetworkgrinch/YADS/workflows/Build%20and%20Release/badge.svg)](https://github.com/thenetworkgrinch/YADS/actions)
+[![Build Status](https://github.com/thenetworkgrinch/YADS/workflows/Build%20and%20Release%20Yet%20Another%20Driver%20Station/badge.svg)](https://github.com/thenetworkgrinch/YADS/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Qt Version](https://img.shields.io/badge/Qt-6.5%2B-green.svg)](https://www.qt.io/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](#supported-platforms)
