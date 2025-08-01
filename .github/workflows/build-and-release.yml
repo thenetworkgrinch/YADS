@@ -14,13 +14,9 @@ on:
         required: false
         default: false
         type: boolean
-      release_tag:
-        description: 'Release tag (e.g., v1.0.0)'
-        required: false
-        type: string
 
 env:
-  QT_VERSION: '6.5.0'
+  QT_VERSION: '6.5.3'
   CMAKE_VERSION: '3.21.0'
 
 jobs:
@@ -41,213 +37,135 @@ jobs:
             echo "is_draft=false" >> $GITHUB_OUTPUT
           fi
 
-  build-windows:
+  build:
     needs: [check-draft]
     if: always() && (github.event_name != 'pull_request' || needs.check-draft.outputs.is_draft == 'false')
-    runs-on: windows-latest
-    
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+            cmake_preset: windows
+            artifact_name: windows
+            qt_arch: win64_msvc2019_64
+          - os: ubuntu-latest
+            name: Linux
+            cmake_preset: linux
+            artifact_name: linux
+            qt_arch: gcc_64
+          - os: macos-latest
+            name: macOS
+            cmake_preset: macos
+            artifact_name: macos
+            qt_arch: clang_64
+
+    runs-on: ${{ matrix.os }}
+    name: Build on ${{ matrix.name }}
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         submodules: recursive
-    
+
+    - name: Clone QHotkey
+      run: |
+        git clone https://github.com/Skycoder42/QHotkey.git thirdparty/QHotkey
+        cd thirdparty/QHotkey
+        git checkout master
+
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
       with:
         version: ${{ env.QT_VERSION }}
-        host: windows
-        target: desktop
-        arch: win64_msvc2019_64
+        arch: ${{ matrix.qt_arch }}
+        cache: true
         modules: 'qtnetworkauth qtmultimedia'
-    
-    - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v1.1
-    
-    - name: Setup Visual Studio environment
+
+    - name: Install system dependencies (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          libudev-dev \
+          libgl1-mesa-dev \
+          libxkbcommon-x11-0 \
+          libxcb-icccm4 \
+          libxcb-image0 \
+          libxcb-keysyms1 \
+          libxcb-randr0 \
+          libxcb-render-util0 \
+          libxcb-xinerama0 \
+          libxcb-xfixes0 \
+          libx11-dev \
+          libxtst-dev \
+          cmake \
+          build-essential \
+          ninja-build
+
+    - name: Setup MSVC (Windows)
+      if: runner.os == 'Windows'
       uses: ilammy/msvc-dev-cmd@v1
       with:
         arch: x64
-    
-    - name: Clone QHotkey
-      run: |
-        git clone https://github.com/Skycoder42/QHotkey.git thirdparty/QHotkey
-        cd thirdparty/QHotkey
-        git checkout master
 
-    - name: Build QHotkey
+    - name: Install CMake and Ninja
+      uses: lukka/get-cmake@latest
+      with:
+        cmakeVersion: ${{ env.CMAKE_VERSION }}
+        ninjaVersion: latest
+
+    - name: Configure CMake
       run: |
-        cd thirdparty/QHotkey
-        mkdir build
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DENABLE_GLOBAL_SHORTCUTS=ON \
+          -DENABLE_FMS_SUPPORT=ON \
+          -DENABLE_GLASS_INTEGRATION=ON \
+          -DENABLE_DASHBOARD_MANAGEMENT=ON \
+          -DENABLE_PRACTICE_MATCH=ON
+
+    - name: Build
+      run: cmake --build build --config Release --parallel
+
+    - name: Create AppImage (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        wget -O linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+        wget -O linuxdeploy-plugin-qt https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+        chmod +x linuxdeploy linuxdeploy-plugin-qt
+        mkdir -p AppDir/usr/bin
+        cp build/YetAnotherDriverStation AppDir/usr/bin/
+        ./linuxdeploy --appdir AppDir --plugin qt --output appimage
+        mv Yet_Another_Driver_Station-*.AppImage YetAnotherDriverStation-linux.AppImage
+
+    - name: Create macOS Bundle
+      if: runner.os == 'macOS'
+      run: |
+        macdeployqt build/YetAnotherDriverStation.app -qmldir=qml
         cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install -G "Visual Studio 16 2019" -A x64
-        cmake --build . --config Release
-        cmake --install . --config Release
+        tar -czf YetAnotherDriverStation-macos.tar.gz YetAnotherDriverStation.app
 
-    - name: Build application
-      run: |
-        qmake YetAnotherDriverStation.pro CONFIG+=release
-        jom
-    
     - name: Package Windows
+      if: runner.os == 'Windows'
       run: |
-        mkdir deploy
-        copy build\release\YetAnotherDriverStation.exe deploy\
-        windeployqt deploy\YetAnotherDriverStation.exe --qmldir qml
-        if exist "thirdparty\QHotkey\build\install\bin\*.dll" copy thirdparty\QHotkey\build\install\bin\*.dll deploy\
+        windeployqt build/Release/YetAnotherDriverStation.exe --qmldir qml
+        cd build/Release
+        7z a YetAnotherDriverStation-windows.zip YetAnotherDriverStation.exe *.dll platforms/ qml/
 
-    - name: Upload Windows artifact
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: YetAnotherDriverStation-Windows
-        path: deploy/
-
-  build-macos:
-    needs: [check-draft]
-    if: always() && (github.event_name != 'pull_request' || needs.check-draft.outputs.is_draft == 'false')
-    runs-on: macos-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: ${{ env.QT_VERSION }}
-        host: mac
-        target: desktop
-        modules: 'qtnetworkauth qtmultimedia'
-    
-    - name: Install CMake
-      uses: lukka/get-cmake@latest
-    
-    - name: Clone QHotkey
-      run: |
-        git clone https://github.com/Skycoder42/QHotkey.git thirdparty/QHotkey
-        cd thirdparty/QHotkey
-        git checkout master
-
-    - name: Build QHotkey
-      run: |
-        cd thirdparty/QHotkey
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
-        make -j$(sysctl -n hw.ncpu)
-        make install
-
-    - name: Build application
-      run: |
-        qmake YetAnotherDriverStation.pro CONFIG+=release
-        make -j$(sysctl -n hw.ncpu)
-    
-    - name: Package macOS
-      run: |
-        macdeployqt build/release/YetAnotherDriverStation.app -qmldir=qml
-        mkdir -p build/release/YetAnotherDriverStation.app/Contents/Frameworks
-        if [ -d "thirdparty/QHotkey/build/install/lib" ]; then
-          cp -R thirdparty/QHotkey/build/install/lib/* build/release/YetAnotherDriverStation.app/Contents/Frameworks/
-        fi
-
-    - name: Create DMG
-      run: |
-        hdiutil create -volname "Yet Another Driver Station" -srcfolder build/release/YetAnotherDriverStation.app -ov -format UDZO YetAnotherDriverStation.dmg
-
-    - name: Upload macOS artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: YetAnotherDriverStation-macOS
-        path: YetAnotherDriverStation.dmg
-
-  build-linux:
-    needs: [check-draft]
-    if: always() && (github.event_name != 'pull_request' || needs.check-draft.outputs.is_draft == 'false')
-    runs-on: ubuntu-20.04
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        submodules: recursive
-    
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libudev-dev libgl1-mesa-dev libxkbcommon-dev libx11-dev libxtst-dev cmake build-essential
-    
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: ${{ env.QT_VERSION }}
-        host: linux
-        target: desktop
-        arch: gcc_64
-        modules: 'qtnetworkauth qtmultimedia'
-    
-    - name: Install CMake
-      uses: lukka/get-cmake@latest
-    
-    - name: Clone QHotkey
-      run: |
-        git clone https://github.com/Skycoder42/QHotkey.git thirdparty/QHotkey
-        cd thirdparty/QHotkey
-        git checkout master
-
-    - name: Build QHotkey
-      run: |
-        cd thirdparty/QHotkey
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=install
-        make -j$(nproc)
-        make install
-    
-    - name: Build application
-      run: |
-        qmake YetAnotherDriverStation.pro CONFIG+=release
-        make -j$(nproc)
-    
-    - name: Package Linux
-      run: |
-        mkdir -p deploy/usr/bin
-        mkdir -p deploy/usr/lib
-        cp build/release/YetAnotherDriverStation deploy/usr/bin/
-        if [ -d "thirdparty/QHotkey/build/install/lib" ]; then
-          cp -R thirdparty/QHotkey/build/install/lib/* deploy/usr/lib/
-        fi
-        
-        # Create AppImage structure
-        mkdir -p deploy/usr/share/applications
-        mkdir -p deploy/usr/share/icons/hicolor/256x256/apps
-        
-        # Create desktop file
-        cat > deploy/usr/share/applications/YetAnotherDriverStation.desktop << EOF
-        [Desktop Entry]
-        Type=Application
-        Name=Yet Another Driver Station
-        Exec=YetAnotherDriverStation
-        Icon=YetAnotherDriverStation
-        Categories=Development;
-        EOF
-        
-        # Deploy Qt libraries
-        wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
-        chmod a+x linuxdeployqt-continuous-x86_64.AppImage
-        
-        ./linuxdeployqt-continuous-x86_64.AppImage deploy/usr/bin/YetAnotherDriverStation -qmldir=qml -appimage || true
-    
-    - name: Upload Linux artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: YetAnotherDriverStation-Linux
-        path: deploy/
+        name: YetAnotherDriverStation-${{ matrix.artifact_name }}
+        path: |
+          build/Release/YetAnotherDriverStation-windows.zip
+          YetAnotherDriverStation-linux.AppImage
+          build/YetAnotherDriverStation-macos.tar.gz
 
   # Comment on PR with download links
   pr-comment:
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build]
     if: github.event_name == 'pull_request' && !failure() && !cancelled()
     runs-on: ubuntu-latest
     steps:
@@ -263,13 +181,9 @@ jobs:
             
             Your PR has been built successfully across all platforms. Download the artifacts to test your changes:
             
-            ### Windows Build
+            ### Download Links
             - [Windows Build](https://github.com/${owner}/${repo}/actions/runs/${run_id})
-            
-            ### macOS Build
             - [macOS Build](https://github.com/${owner}/${repo}/actions/runs/${run_id})
-            
-            ### Linux Build
             - [Linux Build](https://github.com/${owner}/${repo}/actions/runs/${run_id})
             
             **Note:** Artifacts are available for 7 days. Click the links above to access the GitHub Actions page and download the artifacts.
@@ -277,7 +191,7 @@ jobs:
             ### Testing Checklist
             Please test the relevant configurations for your changes:
             - [ ] Windows functionality
-            - [ ] macOS functionality
+            - [ ] macOS functionality  
             - [ ] Linux functionality
             - [ ] Robot communication
             - [ ] Emergency stop functionality
@@ -293,33 +207,23 @@ jobs:
               body: comment
             });
 
-  # Create release if this is a tag push or manual trigger
+  # Create release if this is a tag push
   release:
-    needs: [build-windows, build-macos, build-linux]
+    needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     
     steps:
     - name: Download all artifacts
       uses: actions/download-artifact@v4
-    
-    - name: Create Release Archives
-      run: |
-        cd YetAnotherDriverStation-Windows
-        zip -r ../YetAnotherDriverStation-Windows.zip .
-        cd ../YetAnotherDriverStation-macOS
-        tar -czf ../YetAnotherDriverStation-macOS.tar.gz .
-        cd ../YetAnotherDriverStation-Linux
-        tar -czf ../YetAnotherDriverStation-Linux.tar.gz .
-        cd ..
-    
+      
     - name: Create Release
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          YetAnotherDriverStation-Windows.zip
-          YetAnotherDriverStation-macOS.tar.gz
-          YetAnotherDriverStation-Linux.tar.gz
+          YetAnotherDriverStation-windows/YetAnotherDriverStation-windows.zip
+          YetAnotherDriverStation-linux/YetAnotherDriverStation-linux.AppImage
+          YetAnotherDriverStation-macos/YetAnotherDriverStation-macos.tar.gz
         draft: false
         prerelease: false
       env:
@@ -346,30 +250,26 @@ jobs:
     
     - name: Clone QHotkey for test
       run: |
-        mkdir -p thirdparty
-        cd thirdparty
-        git clone https://github.com/Skycoder42/QHotkey.git
-        cd QHotkey
-        git checkout master
-
-    - name: Test QHotkey CMake build
-      run: |
+        git clone https://github.com/Skycoder42/QHotkey.git thirdparty/QHotkey
         cd thirdparty/QHotkey
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Debug -DQHOTKEY_INSTALL=OFF
-        cmake --build . --config Debug
-        cd ../../..
+        git checkout master
     
     - name: Test build configuration
       run: |
-        qmake YetAnotherDriverStation.pro CONFIG+=debug
-        make clean
+        cmake -B build-test -DCMAKE_BUILD_TYPE=Debug -G Ninja
+        cmake --build build-test --config Debug
         echo "Build configuration test passed"
     
     - name: Test feature flags
       run: |
         echo "Testing with all features disabled..."
-        qmake YetAnotherDriverStation.pro CONFIG+=debug CONFIG+=no_fms_support CONFIG+=no_glass_integration CONFIG+=no_dashboard_management CONFIG+=no_practice_match CONFIG+=no_global_shortcuts
-        make clean
+        cmake -B build-test-minimal \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DENABLE_GLOBAL_SHORTCUTS=OFF \
+          -DENABLE_FMS_SUPPORT=OFF \
+          -DENABLE_GLASS_INTEGRATION=OFF \
+          -DENABLE_DASHBOARD_MANAGEMENT=OFF \
+          -DENABLE_PRACTICE_MATCH=OFF \
+          -G Ninja
+        cmake --build build-test-minimal --config Debug
         echo "Feature flags test passed"

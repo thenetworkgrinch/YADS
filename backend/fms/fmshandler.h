@@ -5,94 +5,87 @@
 #include <QUdpSocket>
 #include <QTimer>
 #include <QHostAddress>
-#include <QNetworkInterface>
-#include <QJsonObject>
-#include <QJsonDocument>
+#include <QNetworkDatagram>
+#include "backend/core/constants.h"
 
-/**
- * @brief Handles communication with the Field Management System (FMS)
- * 
- * The FMSHandler manages the connection and communication with the FMS during
- * official competitions. It handles match state, timing, and field control.
- */
 class FMSHandler : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(bool connected READ isConnected NOTIFY connectedChanged)
-    Q_PROPERTY(QString matchType READ matchType NOTIFY matchTypeChanged)
-    Q_PROPERTY(int matchNumber READ matchNumber NOTIFY matchNumberChanged)
-    Q_PROPERTY(int replayNumber READ replayNumber NOTIFY replayNumberChanged)
-    Q_PROPERTY(QString alliance READ alliance NOTIFY allianceChanged)
-    Q_PROPERTY(int position READ position NOTIFY positionChanged)
-    Q_PROPERTY(int timeRemaining READ timeRemaining NOTIFY timeRemainingChanged)
-    Q_PROPERTY(QString gameSpecificMessage READ gameSpecificMessage NOTIFY gameSpecificMessageChanged)
 
 public:
     explicit FMSHandler(QObject *parent = nullptr);
     ~FMSHandler();
 
-    // Connection status
-    bool isConnected() const { return m_connected; }
-    
-    // Match information
-    QString matchType() const { return m_matchType; }
-    int matchNumber() const { return m_matchNumber; }
-    int replayNumber() const { return m_replayNumber; }
-    QString alliance() const { return m_alliance; }
-    int position() const { return m_position; }
-    int timeRemaining() const { return m_timeRemaining; }
-    QString gameSpecificMessage() const { return m_gameSpecificMessage; }
+    enum MatchState {
+        Unknown = 0,
+        Autonomous = 1,
+        Teleop = 2,
+        Test = 3,
+        Disabled = 4
+    };
+    Q_ENUM(MatchState)
 
-    // FMS addresses
-    static QHostAddress getFMSAddress();
-    static quint16 getFMSPort();
+    enum AllianceColor {
+        Red = 0,
+        Blue = 1,
+        InvalidAlliance = 2
+    };
+    Q_ENUM(AllianceColor)
+
+    bool isConnected() const { return m_connected; }
+    MatchState matchState() const { return m_matchState; }
+    AllianceColor allianceColor() const { return m_allianceColor; }
+    int matchNumber() const { return m_matchNumber; }
+    int matchTime() const { return m_matchTime; }
+    bool isEnabled() const { return m_enabled; }
+    bool isEmergencyStop() const { return m_emergencyStop; }
 
 public slots:
     void connectToFMS();
     void disconnectFromFMS();
+    void setTeamNumber(int teamNumber);
     void sendHeartbeat();
 
 signals:
-    void connectedChanged(bool connected);
-    void matchTypeChanged(const QString &matchType);
-    void matchNumberChanged(int matchNumber);
-    void replayNumberChanged(int replayNumber);
-    void allianceChanged(const QString &alliance);
-    void positionChanged(int position);
-    void timeRemainingChanged(int timeRemaining);
-    void gameSpecificMessageChanged(const QString &message);
-    void matchStarted();
-    void matchEnded();
-    void emergencyStop();
+    void connectionChanged(bool connected);
+    void matchStateChanged(MatchState state);
+    void allianceColorChanged(AllianceColor color);
+    void matchNumberChanged(int number);
+    void matchTimeChanged(int time);
+    void enabledChanged(bool enabled);
+    void emergencyStopChanged(bool emergencyStop);
+    void fmsDataReceived(const QByteArray &data);
 
 private slots:
-    void processFMSData();
-    void handleSocketError(QAbstractSocket::SocketError error);
+    void processPendingDatagrams();
     void onHeartbeatTimer();
+    void onConnectionTimeout();
 
 private:
-    void parseFMSPacket(const QByteArray &data);
-    void updateMatchInfo(const QJsonObject &matchInfo);
-    void detectFMSNetwork();
+    void processPacket(const QByteArray &data, const QHostAddress &sender);
+    void updateConnectionStatus(bool connected);
+    void parseControlPacket(const QByteArray &data);
+    void sendStatusPacket();
 
     QUdpSocket *m_socket;
     QTimer *m_heartbeatTimer;
     QTimer *m_connectionTimer;
     
     bool m_connected;
-    QString m_matchType;
+    int m_teamNumber;
+    MatchState m_matchState;
+    AllianceColor m_allianceColor;
     int m_matchNumber;
-    int m_replayNumber;
-    QString m_alliance;
-    int m_position;
-    int m_timeRemaining;
-    QString m_gameSpecificMessage;
+    int m_matchTime;
+    bool m_enabled;
+    bool m_emergencyStop;
     
     QHostAddress m_fmsAddress;
     quint16 m_fmsPort;
+    quint16 m_localPort;
     
-    static const int HEARTBEAT_INTERVAL = 1000; // 1 second
-    static const int CONNECTION_TIMEOUT = 5000; // 5 seconds
+    static const int HEARTBEAT_INTERVAL = 1000; // ms
+    static const int CONNECTION_TIMEOUT = 5000; // ms
 };
 
 #endif // FMSHANDLER_H

@@ -25,8 +25,6 @@ const quint16 RobotPackets::CRC_TABLE[256] = {
     0x5AF5, 0x4AD4, 0x7AB7, 0x6A96, 0x1A71, 0x0A50, 0x3A33, 0x2A12,
     0xDBFD, 0xCBDC, 0xFBBF, 0xEB9E, 0x9B79, 0x8B58, 0xBB3B, 0xAB1A,
     0x6CA6, 0x7C87, 0x4CE4, 0x5CC5, 0x2C22, 0x3C03, 0x0C60, 0x1C41,
-    0xEDAE, 0xFD8F, 0xCDEC, 0xDDCD, 0xAD2A, 0xBD0B, 0x8D68, 0x9D49,
-    0x7E97, 0x6EB6, 0x5ED5, 0x4EF4, 0x3E13, 0x2E32, 0x1E51, 0x0E70,
     0xFF9F, 0xEFBE, 0xDFDD, 0xCFFC, 0xBF1B, 0xAF3A, 0x9F59, 0x8F78,
     0x9188, 0x81A9, 0xB1CA, 0xA1EB, 0xD10C, 0xC12D, 0xF14E, 0xE16F,
     0x1080, 0x00A1, 0x30C2, 0x20E3, 0x5004, 0x4025, 0x7046, 0x6067,
@@ -1049,6 +1047,238 @@ bool NetworkUtils::isValidTeamNumber(int teamNumber)
 QString NetworkUtils::formatTeamNumber(int teamNumber)
 {
     return QString::number(teamNumber);
+}
+
+QByteArray createControlPacket(const ControlData &data)
+{
+    QByteArray packet;
+    QDataStream stream(&packet, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    stream << data.packetNumber;
+    stream << data.controlByte;
+    stream << data.requestByte;
+    stream << data.teamNumber;
+    stream << data.alliance;
+    stream << data.position;
+    
+    // Add checksum
+    quint16 checksum = calculateChecksum(packet);
+    stream << checksum;
+    
+    return packet;
+}
+
+QByteArray createStatusPacket(const StatusData &data)
+{
+    QByteArray packet;
+    QDataStream stream(&packet, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    stream << data.packetNumber;
+    stream << data.statusByte;
+    stream << data.batteryHigh;
+    stream << data.batteryLow;
+    stream << data.brownoutProtection;
+    stream << data.reserved1;
+    stream << data.reserved2;
+    stream << data.reserved3;
+    
+    // Add checksum
+    quint16 checksum = calculateChecksum(packet);
+    stream << checksum;
+    
+    return packet;
+}
+
+QByteArray createJoystickPacket(const JoystickData &data)
+{
+    QByteArray packet;
+    QDataStream stream(&packet, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    // Write axes
+    for (int i = 0; i < 6; ++i) {
+        stream << data.axes[i];
+    }
+    
+    // Write buttons
+    stream << data.buttons;
+    
+    // Write POVs
+    for (int i = 0; i < 4; ++i) {
+        stream << data.povs[i];
+    }
+    
+    // Add checksum
+    quint16 checksum = calculateChecksum(packet);
+    stream << checksum;
+    
+    return packet;
+}
+
+QByteArray createDisablePacket()
+{
+    ControlData data = {};
+    data.packetNumber = 0;
+    data.controlByte = 0x00; // Disabled
+    data.requestByte = 0x00;
+    data.teamNumber = 0;
+    data.alliance = 0;
+    data.position = 0;
+    
+    return createControlPacket(data);
+}
+
+bool parseControlPacket(const QByteArray &packet, ControlData &data)
+{
+    if (packet.size() < 10) { // 8 bytes + 2 byte checksum
+        return false;
+    }
+    
+    if (!verifyChecksum(packet)) {
+        return false;
+    }
+    
+    QDataStream stream(packet);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    stream >> data.packetNumber;
+    stream >> data.controlByte;
+    stream >> data.requestByte;
+    stream >> data.teamNumber;
+    stream >> data.alliance;
+    stream >> data.position;
+    
+    return true;
+}
+
+bool parseStatusPacket(const QByteArray &packet, StatusData &data)
+{
+    if (packet.size() < 10) { // 8 bytes + 2 byte checksum
+        return false;
+    }
+    
+    if (!verifyChecksum(packet)) {
+        return false;
+    }
+    
+    QDataStream stream(packet);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    stream >> data.packetNumber;
+    stream >> data.statusByte;
+    stream >> data.batteryHigh;
+    stream >> data.batteryLow;
+    stream >> data.brownoutProtection;
+    stream >> data.reserved1;
+    stream >> data.reserved2;
+    stream >> data.reserved3;
+    
+    return true;
+}
+
+bool parseJoystickPacket(const QByteArray &packet, JoystickData &data)
+{
+    if (packet.size() < 14) { // 12 bytes + 2 byte checksum
+        return false;
+    }
+    
+    if (!verifyChecksum(packet)) {
+        return false;
+    }
+    
+    QDataStream stream(packet);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    // Read axes
+    for (int i = 0; i < 6; ++i) {
+        stream >> data.axes[i];
+    }
+    
+    // Read buttons
+    stream >> data.buttons;
+    
+    // Read POVs
+    for (int i = 0; i < 4; ++i) {
+        stream >> data.povs[i];
+    }
+    
+    return true;
+}
+
+bool isValidPacket(const QByteArray &packet)
+{
+    return packet.size() >= 4 && verifyChecksum(packet);
+}
+
+PacketType getPacketType(const QByteArray &packet)
+{
+    if (packet.size() < 2) {
+        return ControlPacket; // Default
+    }
+    
+    // Packet type is typically in the second byte or determined by size/content
+    if (packet.size() == 10) {
+        return packet[1] & 0x80 ? StatusPacket : ControlPacket;
+    } else if (packet.size() == 14) {
+        return JoystickPacket;
+    } else if (packet.size() == 8) {
+        return DisablePacket;
+    }
+    
+    return ControlPacket;
+}
+
+quint16 calculateChecksum(const QByteArray &data)
+{
+    quint16 checksum = 0;
+    for (int i = 0; i < data.size(); ++i) {
+        checksum += static_cast<quint8>(data[i]);
+    }
+    return checksum;
+}
+
+bool verifyChecksum(const QByteArray &packet)
+{
+    if (packet.size() < 2) {
+        return false;
+    }
+    
+    // Extract checksum from last 2 bytes
+    QDataStream stream(packet.right(2));
+    stream.setByteOrder(QDataStream::BigEndian);
+    quint16 receivedChecksum;
+    stream >> receivedChecksum;
+    
+    // Calculate checksum of data (excluding checksum bytes)
+    QByteArray data = packet.left(packet.size() - 2);
+    quint16 calculatedChecksum = calculateChecksum(data);
+    
+    return receivedChecksum == calculatedChecksum;
+}
+
+QHostAddress getTeamAddress(int teamNumber, int device)
+{
+    if (!isValidTeamNumber(teamNumber)) {
+        return QHostAddress();
+    }
+    
+    int firstOctet = teamNumber / 100;
+    int secondOctet = teamNumber % 100;
+    
+    return QHostAddress(QString("10.%1.%2.%3").arg(firstOctet).arg(secondOctet).arg(device));
+}
+
+bool isValidTeamNumber(int teamNumber)
+{
+    return teamNumber > 0 && teamNumber <= 9999;
+}
+
+QString formatTeamAddress(int teamNumber, int device)
+{
+    QHostAddress addr = getTeamAddress(teamNumber, device);
+    return addr.isNull() ? QString() : addr.toString();
 }
 
 } // namespace RobotPackets

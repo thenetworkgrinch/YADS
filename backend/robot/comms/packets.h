@@ -4,160 +4,142 @@
 #include <QByteArray>
 #include <QDataStream>
 #include <QHostAddress>
-#include <QDateTime>
-
-/**
- * @brief Robot communication packet definitions and utilities
- * 
- * This file contains all the packet structures and utilities for
- * communicating with FRC robots using the standard protocol.
- */
 
 namespace RobotPackets {
 
 // Packet types
-enum PacketType : quint8 {
-    ROBOT_CONTROL = 0x00,
-    ROBOT_STATUS = 0x01,
-    JOYSTICK_DATA = 0x02,
-    TIMEZONE_DATA = 0x03,
-    DISABLE_FAULT = 0x04,
-    RAIL_FAULT = 0x05,
-    REBOOT = 0x06,
-    VERSION = 0x07,
-    ERROR_DATA = 0x08,
-    PRINT_DATA = 0x09,
-    NETCONSOLE = 0x0A
+enum PacketType {
+    ControlPacket = 0x00,
+    StatusPacket = 0x01,
+    JoystickPacket = 0x02,
+    DisablePacket = 0x03
 };
 
-// Control packet flags
-enum ControlFlags : quint8 {
-    ENABLED = 0x01,
-    AUTONOMOUS = 0x02,
-    TEST = 0x04,
-    EMERGENCY_STOP = 0x08,
-    FMS_ATTACHED = 0x10,
-    DS_ATTACHED = 0x20
+// Control packet structure
+struct ControlData {
+    quint16 packetNumber;
+    quint8 controlByte;
+    quint8 requestByte;
+    quint16 teamNumber;
+    quint8 alliance;
+    quint8 position;
+    
+    // Control byte flags
+    bool isEnabled() const { return (controlByte & 0x01) != 0; }
+    bool isAutonomous() const { return (controlByte & 0x02) != 0; }
+    bool isTest() const { return (controlByte & 0x04) != 0; }
+    bool isEmergencyStop() const { return (controlByte & 0x80) != 0; }
+    
+    void setEnabled(bool enabled) {
+        if (enabled) controlByte |= 0x01;
+        else controlByte &= ~0x01;
+    }
+    
+    void setAutonomous(bool autonomous) {
+        if (autonomous) controlByte |= 0x02;
+        else controlByte &= ~0x02;
+    }
+    
+    void setTest(bool test) {
+        if (test) controlByte |= 0x04;
+        else controlByte &= ~0x04;
+    }
+    
+    void setEmergencyStop(bool emergencyStop) {
+        if (emergencyStop) controlByte |= 0x80;
+        else controlByte &= ~0x80;
+    }
 };
 
-// Status packet flags
-enum StatusFlags : quint8 {
-    ROBOT_ENABLED = 0x01,
-    ROBOT_AUTO = 0x02,
-    ROBOT_TEST = 0x04,
-    ROBOT_ESTOP = 0x08,
-    BROWNOUT = 0x10,
-    CODE_READY = 0x20
+// Status packet structure
+struct StatusData {
+    quint16 packetNumber;
+    quint8 statusByte;
+    quint8 batteryHigh;
+    quint8 batteryLow;
+    quint8 brownoutProtection;
+    quint8 reserved1;
+    quint8 reserved2;
+    quint8 reserved3;
+    
+    // Battery voltage in 0.1V increments
+    int batteryVoltage() const {
+        return (batteryHigh << 8) | batteryLow;
+    }
+    
+    void setBatteryVoltage(int voltage) {
+        batteryHigh = (voltage >> 8) & 0xFF;
+        batteryLow = voltage & 0xFF;
+    }
+    
+    // Status byte flags
+    bool isRobotEnabled() const { return (statusByte & 0x01) != 0; }
+    bool isAutonomousMode() const { return (statusByte & 0x02) != 0; }
+    bool isTestMode() const { return (statusByte & 0x04) != 0; }
+    bool isEmergencyStop() const { return (statusByte & 0x80) != 0; }
+    bool isBrownout() const { return (brownoutProtection & 0x01) != 0; }
 };
 
-#pragma pack(push, 1)
-
-/**
- * @brief Robot control packet structure
- */
-struct ControlPacket {
-    quint16 packetIndex;
-    quint8 generalData;
-    quint8 mode;
-    quint16 request;
+// Joystick data structure
+struct JoystickData {
+    quint8 axes[6];      // 6 analog axes
+    quint16 buttons;     // 16 digital buttons
+    quint8 povs[4];      // 4 POV hats
     
-    // Joystick data (6 joysticks max)
-    struct JoystickData {
-        quint8 axes[6];
-        quint16 buttons;
-        quint8 povs[4];
-    } joysticks[6];
+    // Helper methods
+    float getAxis(int index) const {
+        if (index < 0 || index >= 6) return 0.0f;
+        return (axes[index] - 128) / 127.0f; // Convert to -1.0 to 1.0
+    }
     
-    // CRC
-    quint32 crc;
+    void setAxis(int index, float value) {
+        if (index < 0 || index >= 6) return;
+        axes[index] = static_cast<quint8>((value * 127.0f) + 128);
+    }
     
-    ControlPacket();
-    void setEnabled(bool enabled);
-    void setMode(quint8 mode);
-    void setEmergencyStop(bool estop);
-    void setFMSAttached(bool attached);
-    void calculateCRC();
-    QByteArray toByteArray() const;
+    bool getButton(int index) const {
+        if (index < 0 || index >= 16) return false;
+        return (buttons & (1 << index)) != 0;
+    }
+    
+    void setButton(int index, bool pressed) {
+        if (index < 0 || index >= 16) return;
+        if (pressed) buttons |= (1 << index);
+        else buttons &= ~(1 << index);
+    }
+    
+    int getPOV(int index) const {
+        if (index < 0 || index >= 4) return -1;
+        return povs[index] == 0xFF ? -1 : povs[index] * 45; // Convert to degrees
+    }
+    
+    void setPOV(int index, int angle) {
+        if (index < 0 || index >= 4) return;
+        povs[index] = (angle < 0) ? 0xFF : static_cast<quint8>(angle / 45);
+    }
 };
 
-/**
- * @brief Robot status packet structure
- */
-struct StatusPacket {
-    quint8 generalData;
-    quint8 mode;
-    quint16 batteryVoltage; // In millivolts
-    quint16 request;
-    quint32 pcmId;
-    quint8 pdpId;
-    quint8 pcmVersion;
-    quint8 pdpVersion;
-    quint32 robotCodeVersion;
-    
-    StatusPacket();
-    bool isEnabled() const;
-    bool isAutonomous() const;
-    bool isTest() const;
-    bool isEmergencyStop() const;
-    bool isBrownout() const;
-    bool isCodeReady() const;
-    double getBatteryVoltage() const;
-    void fromByteArray(const QByteArray &data);
-};
+// Packet creation functions
+QByteArray createControlPacket(const ControlData &data);
+QByteArray createStatusPacket(const StatusData &data);
+QByteArray createJoystickPacket(const JoystickData &data);
+QByteArray createDisablePacket();
 
-/**
- * @brief Joystick data packet
- */
-struct JoystickPacket {
-    quint8 joystickId;
-    quint8 axisCount;
-    quint8 axes[12];
-    quint8 buttonCount;
-    quint16 buttons;
-    quint8 povCount;
-    quint16 povs[4];
-    
-    JoystickPacket();
-    void setAxis(int index, double value);
-    void setButton(int index, bool pressed);
-    void setPOV(int index, int angle);
-    QByteArray toByteArray() const;
-};
+// Packet parsing functions
+bool parseControlPacket(const QByteArray &packet, ControlData &data);
+bool parseStatusPacket(const QByteArray &packet, StatusData &data);
+bool parseJoystickPacket(const QByteArray &packet, JoystickData &data);
 
-#pragma pack(pop)
+// Utility functions
+bool isValidPacket(const QByteArray &packet);
+PacketType getPacketType(const QByteArray &packet);
+quint16 calculateChecksum(const QByteArray &data);
+bool verifyChecksum(const QByteArray &packet);
 
-/**
- * @brief Packet builder and parser utilities
- */
-class PacketBuilder {
-public:
-    static QByteArray buildControlPacket(const ControlPacket &packet);
-    static QByteArray buildJoystickPacket(const JoystickPacket &packet);
-    static QByteArray buildTimezonePacket(const QTimeZone &timezone);
-    static QByteArray buildRebootPacket();
-    static QByteArray buildVersionRequestPacket();
-    
-    static bool parseStatusPacket(const QByteArray &data, StatusPacket &packet);
-    static bool parseErrorPacket(const QByteArray &data, QString &error);
-    static bool parsePrintPacket(const QByteArray &data, QString &message);
-    
-    static quint32 calculateCRC32(const QByteArray &data);
-    static bool verifyCRC32(const QByteArray &data, quint32 expectedCRC);
-};
-
-/**
- * @brief Network utilities for robot communication
- */
-class NetworkUtils {
-public:
-    static QHostAddress getRobotAddress(int teamNumber);
-    static QList<QHostAddress> getAllRobotAddresses(int teamNumber);
-    static quint16 getRobotPort();
-    static quint16 getDriverStationPort();
-    
-    static bool isValidTeamNumber(int teamNumber);
-    static QString formatTeamNumber(int teamNumber);
-};
+// Network utilities
+QHostAddress getTeamAddress(int teamNumber, int device = 2);
+bool isValidTeamNumber(int teamNumber);
+QString formatTeamAddress(int teamNumber, int device = 2);
 
 } // namespace RobotPackets
 

@@ -5,58 +5,72 @@
 #include <QUdpSocket>
 #include <QTimer>
 #include <QHostAddress>
+#include "backend/core/constants.h"
 
-/**
- * @brief Handles FMS communication specifically for robot control
- * 
- * This is a specialized FMS handler that focuses on robot control
- * aspects of FMS communication, separate from the main FMS handler.
- */
 class RobotFMSHandler : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(bool fmsConnected READ isFMSConnected NOTIFY fmsConnectedChanged)
-    Q_PROPERTY(bool robotEnabled READ isRobotEnabled NOTIFY robotEnabledChanged)
-    Q_PROPERTY(QString robotMode READ robotMode NOTIFY robotModeChanged)
 
 public:
     explicit RobotFMSHandler(QObject *parent = nullptr);
     ~RobotFMSHandler();
 
-    bool isFMSConnected() const { return m_fmsConnected; }
-    bool isRobotEnabled() const { return m_robotEnabled; }
-    QString robotMode() const { return m_robotMode; }
+    enum RobotMode {
+        Disabled = 0,
+        Autonomous = 1,
+        Teleop = 2,
+        Test = 3
+    };
+    Q_ENUM(RobotMode)
+
+    bool isConnected() const { return m_connected; }
+    RobotMode currentMode() const { return m_currentMode; }
+    bool isEnabled() const { return m_enabled; }
+    bool isEmergencyStop() const { return m_emergencyStop; }
+    int batteryVoltage() const { return m_batteryVoltage; }
 
 public slots:
-    void enableRobot();
-    void disableRobot();
-    void setRobotMode(const QString &mode);
-    void emergencyStop();
+    void connectToRobot();
+    void disconnectFromRobot();
+    void setTeamNumber(int teamNumber);
+    void setRobotMode(RobotMode mode);
+    void setEnabled(bool enabled);
+    void setEmergencyStop(bool emergencyStop);
 
 signals:
-    void fmsConnectedChanged(bool connected);
-    void robotEnabledChanged(bool enabled);
-    void robotModeChanged(const QString &mode);
-    void fmsCommandReceived(const QString &command);
+    void connectionChanged(bool connected);
+    void robotModeChanged(RobotMode mode);
+    void enabledChanged(bool enabled);
+    void emergencyStopChanged(bool emergencyStop);
+    void batteryVoltageChanged(int voltage);
+    void robotDataReceived(const QByteArray &data);
 
 private slots:
-    void processFMSCommand();
-    void sendRobotStatus();
+    void processPendingDatagrams();
+    void sendControlPacket();
+    void onConnectionTimeout();
 
 private:
-    void parseCommand(const QByteArray &data);
-    void updateRobotState(bool enabled, const QString &mode);
+    void processStatusPacket(const QByteArray &data);
+    void updateConnectionStatus(bool connected);
 
-    QUdpSocket *m_commandSocket;
-    QTimer *m_statusTimer;
+    QUdpSocket *m_socket;
+    QTimer *m_controlTimer;
+    QTimer *m_connectionTimer;
     
-    bool m_fmsConnected;
-    bool m_robotEnabled;
-    QString m_robotMode;
+    bool m_connected;
+    int m_teamNumber;
+    RobotMode m_currentMode;
+    bool m_enabled;
+    bool m_emergencyStop;
+    int m_batteryVoltage;
     
-    QHostAddress m_fmsAddress;
-    quint16 m_commandPort;
-    quint16 m_statusPort;
+    QHostAddress m_robotAddress;
+    quint16 m_robotPort;
+    quint16 m_localPort;
+    
+    static const int CONTROL_INTERVAL = 20; // ms (50Hz)
+    static const int CONNECTION_TIMEOUT = 1000; // ms
 };
 
 #endif // ROBOT_FMS_HANDLER_H

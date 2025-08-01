@@ -1,6 +1,10 @@
 # Yet Another Driver Station
 
-A modern, cross-platform FRC Driver Station application built with Qt/QML, designed to provide teams with a reliable and feature-rich interface for controlling their robots during competitions and practice sessions.
+A modern, cross-platform FRC Driver Station application built with Qt/QML and CMake, designed to provide teams with a reliable and feature-rich interface for controlling their robots during competitions and practice sessions.
+
+![Build Status](https://github.com/thenetworkgrinch/yet-another-driver-station/workflows/Build%20and%20Release%20Yet%20Another%20Driver%20Station/badge.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 
 ## Features
 
@@ -31,6 +35,7 @@ A modern, cross-platform FRC Driver Station application built with Qt/QML, desig
 ### Minimum Requirements
 - **Operating System**: Windows 10+, macOS 10.15+, or Linux (Ubuntu 18.04+)
 - **Qt Version**: Qt 6.5.0 or later
+- **CMake**: CMake 3.21 or later
 - **RAM**: 4GB minimum, 8GB recommended
 - **Storage**: 500MB available space
 - **Network**: Ethernet adapter for robot communication
@@ -66,24 +71,25 @@ Download the latest release for your platform from the [Releases](https://github
 ### Building from Source
 
 #### Prerequisites
-- Qt 6.5.0 or later with QML support
-- CMake 3.16 or later
-- C++17 compatible compiler
-- Git
+- **Qt 6.5.0 or later** with QML and Network modules
+- **CMake 3.21 or later**
+- **C++17 compatible compiler**
+- **Git** (for cloning dependencies)
 
 #### Platform-specific Dependencies
 
 **Windows:**
-- Visual Studio 2019 or later
+- Visual Studio 2019 or later with MSVC
 - Windows SDK
 
 **macOS:**
 - Xcode Command Line Tools
-- macOS SDK
+- macOS SDK 10.15 or later
 
 **Linux:**
 - Build essentials: `sudo apt-get install build-essential cmake`
 - Development libraries: `sudo apt-get install libudev-dev libgl1-mesa-dev libxkbcommon-dev libx11-dev libxtst-dev`
+- Qt6 development packages: `sudo apt-get install qt6-base-dev qt6-declarative-dev qt6-tools-dev`
 
 #### Build Steps
 
@@ -93,185 +99,81 @@ Download the latest release for your platform from the [Releases](https://github
    cd yet-another-driver-station
    ```
 
-2. **Build QHotkey dependency:**
+2. **Create build directory:**
+   ```bash
+   mkdir build
+   cd build
+   ```
+
+3. **Configure with CMake:**
+   ```bash
+   # Basic configuration
+   cmake .. -DCMAKE_BUILD_TYPE=Release
    
-   **Linux/macOS:**
-   ```bash
-   chmod +x scripts/build-qhotkey.sh
-   ./scripts/build-qhotkey.sh Release
-   ```
+   # Or with Ninja generator (faster builds)
+   cmake .. -DCMAKE_BUILD_TYPE=Release -G Ninja
    
-   **Windows (PowerShell):**
-   ```powershell
-   .\scripts\build-qhotkey.ps1 -BuildType Release
+   # Or with specific Qt installation
+   cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/path/to/qt6
    ```
 
-3. **Build the application:**
+4. **Build the application:**
    ```bash
-   qmake YetAnotherDriverStation.pro CONFIG+=release
-   make  # or 'nmake' on Windows
+   # With make
+   make -j$(nproc)
+   
+   # Or with Ninja
+   ninja
+   
+   # Or with CMake (cross-platform)
+   cmake --build . --config Release --parallel
    ```
 
-4. **Run the application:**
+5. **Run the application:**
    ```bash
-   ./build/release/YetAnotherDriverStation  # Linux/macOS
-   .\build\release\YetAnotherDriverStation.exe  # Windows
+   ./YetAnotherDriverStation  # Linux/macOS
+   .\YetAnotherDriverStation.exe  # Windows
    ```
 
-#### Build Configuration Options
+#### CMake Configuration Options
 
-You can disable specific features during build:
+You can customize the build with various CMake options:
 
 ```bash
-# Disable all optional features
-qmake YetAnotherDriverStation.pro CONFIG+=release \
-    CONFIG+=no_fms_support \
-    CONFIG+=no_glass_integration \
-    CONFIG+=no_dashboard_management \
-    CONFIG+=no_practice_match \
-    CONFIG+=no_global_shortcuts
+# Disable specific features
+cmake .. -DCMAKE_BUILD_TYPE=Release \
+    -DENABLE_FMS_SUPPORT=OFF \
+    -DENABLE_GLASS_INTEGRATION=OFF \
+    -DENABLE_GLOBAL_SHORTCUTS=OFF \
+    -DENABLE_DASHBOARD_MANAGEMENT=OFF \
+    -DENABLE_PRACTICE_MATCH=OFF
 
-# Disable only global shortcuts
-qmake YetAnotherDriverStation.pro CONFIG+=release CONFIG+=no_global_shortcuts
+# Enable debug logging
+cmake .. -DCMAKE_BUILD_TYPE=Debug -DENABLE_DEBUG_LOGGING=ON
+
+# Static linking (Windows/Linux)
+cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON
 ```
 
-## Usage
+**Available CMake Options:**
+- `ENABLE_FMS_SUPPORT` (ON/OFF): Enable Field Management System integration
+- `ENABLE_GLASS_INTEGRATION` (ON/OFF): Enable Glass dashboard support
+- `ENABLE_GLOBAL_SHORTCUTS` (ON/OFF): Enable system-wide hotkeys
+- `ENABLE_DASHBOARD_MANAGEMENT` (ON/OFF): Enable external dashboard management
+- `ENABLE_PRACTICE_MATCH` (ON/OFF): Enable practice match features
+- `ENABLE_DEBUG_LOGGING` (ON/OFF): Enable verbose debug logging
+- `BUILD_STATIC` (ON/OFF): Build with static linking (where possible)
 
-### First Time Setup
-1. Launch the application
-2. Enter your team number in the settings
-3. Connect your robot via Ethernet
-4. Configure any controllers in the Controllers tab
+#### Using the Build Scripts
 
-### Basic Operation
-1. **Enable Robot**: Click the "Enable" button or press Space
-2. **Disable Robot**: Click "Disable" or press Space again
-3. **Emergency Stop**: Press Enter or Ctrl+E for immediate stop
-4. **Mode Selection**: Choose Autonomous, Teleop, or Test mode
-5. **Monitor Status**: Watch the status indicators for robot and network health
+For convenience, you can use the provided build scripts:
 
-### Global Shortcuts
-These shortcuts work system-wide, even when the application isn't focused:
-- **Space**: Toggle robot enable/disable
-- **Enter**: Emergency stop (disable robot)
-- **Ctrl+E**: Emergency stop (alternative)
-
-### Practice Matches
-1. Go to the Operations tab
-2. Click "Start Practice Match"
-3. The timer will automatically cycle through Autonomous and Teleop periods
-4. Use this to simulate real match conditions
-
-## Configuration
-
-### Team Settings
-- Set your team number in Settings → Team Configuration
-- The application will automatically calculate robot IP addresses
-
-### Network Configuration
-- Default robot IP: `10.TE.AM.2` (where TEAM is your team number)
-- FMS IP: Automatically detected during competitions
-- Dashboard ports: Configurable per dashboard type
-
-### Controller Configuration
-- Controllers are automatically detected when plugged in
-- Mapping can be customized in the Controllers tab
-- Supports Xbox, PlayStation, and most HID-compliant controllers
-
-### Dashboard Integration
-The application supports multiple dashboard types:
-- **SmartDashboard**: Classic LabVIEW-based dashboard
-- **Shuffleboard**: Modern Java-based dashboard
-- **Glass**: Web-based dashboard with advanced features
-- **Custom**: Support for team-specific dashboards
-
-## Troubleshooting
-
-### Common Issues
-
-**Robot not connecting:**
-- Verify team number is correct
-- Check Ethernet cable connection
-- Ensure robot is powered on and running code
-- Check firewall settings
-
-**Controllers not detected:**
-- Try unplugging and reconnecting the controller
-- Check if the controller works in other applications
-- Verify USB cable is functional
-
-**Global shortcuts not working:**
-- Check if another application is using the same shortcuts
-- On Linux, ensure X11 is running (Wayland support is limited)
-- Try running the application as administrator (Windows only)
-
-**Build failures:**
-- Ensure all dependencies are installed
-- Check Qt version compatibility
-- Verify CMake and compiler versions
-- Try cleaning the build directory
-
-### Getting Help
-- Check the [Issues](https://github.com/thenetworkgrinch/yet-another-driver-station/issues) page
-- Join our [Discord community](https://discord.gg/your-invite)
-- Email support: support@your-domain.com
-
-## Development
-
-### Project Structure
-```
-yet-another-driver-station/
-├── backend/                 # C++ backend code
-│   ├── core/               # Core utilities and logging
-│   ├── comms/              # Robot communication
-│   ├── controllers/        # Controller handling
-│   ├── managers/           # System managers
-│   └── fms/                # FMS integration
-├── qml/                    # QML user interface
-├── dashboards/             # Dashboard configurations
-├── scripts/                # Build and utility scripts
-├── thirdparty/            # Third-party dependencies
-└── .github/               # CI/CD workflows
+**Linux/macOS:**
+```bash
+chmod +x scripts/build.sh
+./scripts/build.sh Release
 ```
 
-### Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-### Code Style
-- C++: Follow Qt coding conventions
-- QML: Use Qt Quick best practices
-- Comments: Document public APIs and complex logic
-- Testing: Add unit tests for new functionality
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- **FIRST Robotics Competition** for the protocol specifications
-- **Qt Project** for the excellent cross-platform framework
-- **QHotkey** library for global shortcut support
-- **FRC Community** for feedback and contributions
-
-## Roadmap
-
-### Version 2025.2.0
-- [ ] Advanced telemetry visualization
-- [ ] Plugin system for custom extensions
-- [ ] Enhanced logging and replay capabilities
-- [ ] Mobile companion app
-
-### Version 2025.3.0
-- [ ] Machine learning-based network optimization
-- [ ] Advanced robot diagnostics
-- [ ] Team collaboration features
-- [ ] Cloud-based configuration sync
-
----
-
-**Built with ❤️ for the FRC Community**
+**Windows (PowerShell):**
+```powershell
+.\scripts\build.ps1 -BuildType Release

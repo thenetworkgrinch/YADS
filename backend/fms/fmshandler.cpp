@@ -1,11 +1,7 @@
 #include "fmshandler.h"
-#include "../core/logger.h"
-#include "../core/constants.h"
-
-#include <QJsonObject>
-#include <QJsonDocument>
-#include <QNetworkInterface>
-#include <QDebug>
+#include "backend/core/logger.h"
+#include <QDataStream>
+#include <QDateTime>
 
 FMSHandler::FMSHandler(QObject *parent)
     : QObject(parent)
@@ -13,36 +9,30 @@ FMSHandler::FMSHandler(QObject *parent)
     , m_heartbeatTimer(new QTimer(this))
     , m_connectionTimer(new QTimer(this))
     , m_connected(false)
-    , m_matchType("None")
+    , m_teamNumber(0)
+    , m_matchState(Unknown)
+    , m_allianceColor(InvalidAlliance)
     , m_matchNumber(0)
-    , m_replayNumber(0)
-    , m_alliance("Red")
-    , m_position(1)
-    , m_timeRemaining(0)
-    , m_gameSpecificMessage("")
+    , m_matchTime(0)
+    , m_enabled(false)
+    , m_emergencyStop(false)
     , m_fmsAddress(QHostAddress("10.0.100.5"))
-    , m_fmsPort(1750)
+    , m_fmsPort(1160)
+    , m_localPort(1110)
 {
-    // Setup socket connections
-    connect(m_socket, &QUdpSocket::readyRead, this, &FMSHandler::processFMSData);
-    connect(m_socket, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::errorOccurred),
-            this, &FMSHandler::handleSocketError);
-
     // Setup timers
     m_heartbeatTimer->setInterval(HEARTBEAT_INTERVAL);
+    m_heartbeatTimer->setSingleShot(false);
     connect(m_heartbeatTimer, &QTimer::timeout, this, &FMSHandler::onHeartbeatTimer);
-
-    m_connectionTimer->setSingleShot(true);
+    
     m_connectionTimer->setInterval(CONNECTION_TIMEOUT);
-    connect(m_connectionTimer, &QTimer::timeout, this, [this]() {
-        if (m_connected) {
-            m_connected = false;
-            emit connectedChanged(false);
-            Logger::instance().log("FMS connection timeout", Logger::Warning);
-        }
-    });
-
-    detectFMSNetwork();
+    m_connectionTimer->setSingleShot(true);
+    connect(m_connectionTimer, &QTimer::timeout, this, &FMSHandler::onConnectionTimeout);
+    
+    // Setup socket
+    connect(m_socket, &QUdpSocket::readyRead, this, &FMSHandler::processPendingDatagrams);
+    
+    Logger::instance().log(Logger::Info, "FMS Handler initialized");
 }
 
 FMSHandler::~FMSHandler()
@@ -55,15 +45,18 @@ void FMSHandler::connectToFMS()
     if (m_connected) {
         return;
     }
-
-    Logger::instance().log("Attempting to connect to FMS at " + m_fmsAddress.toString(), Logger::Info);
-
-    if (!m_socket->bind(QHostAddress::Any, 1110)) {
-        Logger::instance().log("Failed to bind FMS socket: " + m_socket->errorString(), Logger::Error);
+    
+    if (!m_socket->bind(QHostAddress::Any, m_localPort)) {
+        Logger::instance().log(Logger::Error, QString("Failed to bind FMS socket to port %1").arg(m_localPort));
         return;
     }
-
+    
     m_heartbeatTimer->start();
+    m_connectionTimer->start();
+    
+    Logger::instance().log(Logger::Info, QString("Attempting to connect to FMS at %1:%2")
+                          .arg(m_fmsAddress.toString()).arg(m_fmsPort));
+    
     sendHeartbeat();
 }
 
@@ -71,182 +64,160 @@ void FMSHandler::disconnectFromFMS()
 {
     m_heartbeatTimer->stop();
     m_connectionTimer->stop();
+    m_socket->close();
     
-    if (m_socket->state() != QAbstractSocket::UnconnectedState) {
-        m_socket->close();
-    }
-
     if (m_connected) {
-        m_connected = false;
-        emit connectedChanged(false);
-        Logger::instance().log("Disconnected from FMS", Logger::Info);
+        updateConnectionStatus(false);
+        Logger::instance().log(Logger::Info, "Disconnected from FMS");
+    }
+}
+
+void FMSHandler::setTeamNumber(int teamNumber)
+{
+    if (m_teamNumber != teamNumber) {
+        m_teamNumber = teamNumber;
+        
+        // Update FMS address based on team number
+        if (teamNumber > 0) {
+            int firstOctet = teamNumber / 100;
+            int secondOctet = teamNumber % 100;
+            m_fmsAddress = QHostAddress(QString("10.%1.%2.5").arg(firstOctet).arg(secondOctet));
+        }
+        
+        Logger::instance().log(Logger::Info, QString("Team number set to %1, FMS address: %2")
+                              .arg(teamNumber).arg(m_fmsAddress.toString()));
     }
 }
 
 void FMSHandler::sendHeartbeat()
 {
-    QJsonObject heartbeat;
-    heartbeat["type"] = "heartbeat";
-    heartbeat["timestamp"] = QDateTime::currentMSecsSinceEpoch();
-    heartbeat["teamNumber"] = Constants::TEAM_NUMBER;
-
-    QJsonDocument doc(heartbeat);
-    QByteArray data = doc.toJson(QJsonDocument::Compact);
-
-    qint64 sent = m_socket->writeDatagram(data, m_fmsAddress, m_fmsPort);
-    if (sent == -1) {
-        Logger::instance().log("Failed to send FMS heartbeat: " + m_socket->errorString(), Logger::Warning);
-    }
+    sendStatusPacket();
 }
 
-void FMSHandler::processFMSData()
+void FMSHandler::processPendingDatagrams()
 {
     while (m_socket->hasPendingDatagrams()) {
-        QByteArray data;
-        data.resize(m_socket->pendingDatagramSize());
-        QHostAddress sender;
-        quint16 senderPort;
-
-        qint64 received = m_socket->readDatagram(data.data(), data.size(), &sender, &senderPort);
-        if (received > 0) {
-            parseFMSPacket(data);
-            
-            // Reset connection timeout
-            m_connectionTimer->start();
-            
-            if (!m_connected) {
-                m_connected = true;
-                emit connectedChanged(true);
-                Logger::instance().log("Connected to FMS", Logger::Info);
-            }
-        }
-    }
-}
-
-void FMSHandler::parseFMSPacket(const QByteArray &data)
-{
-    QJsonParseError error;
-    QJsonDocument doc = QJsonDocument::fromJson(data, &error);
-    
-    if (error.error != QJsonParseError::NoError) {
-        Logger::instance().log("Failed to parse FMS packet: " + error.errorString(), Logger::Warning);
-        return;
-    }
-
-    QJsonObject obj = doc.object();
-    QString type = obj["type"].toString();
-
-    if (type == "matchInfo") {
-        updateMatchInfo(obj);
-    } else if (type == "emergencyStop") {
-        emit emergencyStop();
-        Logger::instance().log("Emergency stop received from FMS", Logger::Critical);
-    } else if (type == "matchStart") {
-        emit matchStarted();
-        Logger::instance().log("Match started", Logger::Info);
-    } else if (type == "matchEnd") {
-        emit matchEnded();
-        Logger::instance().log("Match ended", Logger::Info);
-    }
-}
-
-void FMSHandler::updateMatchInfo(const QJsonObject &matchInfo)
-{
-    QString newMatchType = matchInfo["matchType"].toString();
-    if (newMatchType != m_matchType) {
-        m_matchType = newMatchType;
-        emit matchTypeChanged(m_matchType);
-    }
-
-    int newMatchNumber = matchInfo["matchNumber"].toInt();
-    if (newMatchNumber != m_matchNumber) {
-        m_matchNumber = newMatchNumber;
-        emit matchNumberChanged(m_matchNumber);
-    }
-
-    int newReplayNumber = matchInfo["replayNumber"].toInt();
-    if (newReplayNumber != m_replayNumber) {
-        m_replayNumber = newReplayNumber;
-        emit replayNumberChanged(m_replayNumber);
-    }
-
-    QString newAlliance = matchInfo["alliance"].toString();
-    if (newAlliance != m_alliance) {
-        m_alliance = newAlliance;
-        emit allianceChanged(m_alliance);
-    }
-
-    int newPosition = matchInfo["position"].toInt();
-    if (newPosition != m_position) {
-        m_position = newPosition;
-        emit positionChanged(m_position);
-    }
-
-    int newTimeRemaining = matchInfo["timeRemaining"].toInt();
-    if (newTimeRemaining != m_timeRemaining) {
-        m_timeRemaining = newTimeRemaining;
-        emit timeRemainingChanged(m_timeRemaining);
-    }
-
-    QString newGameSpecificMessage = matchInfo["gameSpecificMessage"].toString();
-    if (newGameSpecificMessage != m_gameSpecificMessage) {
-        m_gameSpecificMessage = newGameSpecificMessage;
-        emit gameSpecificMessageChanged(m_gameSpecificMessage);
-    }
-}
-
-void FMSHandler::handleSocketError(QAbstractSocket::SocketError error)
-{
-    QString errorString = m_socket->errorString();
-    Logger::instance().log("FMS socket error: " + errorString, Logger::Error);
-
-    if (m_connected) {
-        m_connected = false;
-        emit connectedChanged(false);
+        QNetworkDatagram datagram = m_socket->receiveDatagram();
+        processPacket(datagram.data(), datagram.senderAddress());
     }
 }
 
 void FMSHandler::onHeartbeatTimer()
 {
-    sendHeartbeat();
+    sendStatusPacket();
 }
 
-void FMSHandler::detectFMSNetwork()
+void FMSHandler::onConnectionTimeout()
 {
-    // Try to detect FMS network automatically
-    QList<QNetworkInterface> interfaces = QNetworkInterface::allInterfaces();
-    
-    for (const QNetworkInterface &interface : interfaces) {
-        if (interface.flags() & QNetworkInterface::IsUp &&
-            interface.flags() & QNetworkInterface::IsRunning &&
-            !(interface.flags() & QNetworkInterface::IsLoopBack)) {
-            
-            QList<QNetworkAddressEntry> entries = interface.addressEntries();
-            for (const QNetworkAddressEntry &entry : entries) {
-                QHostAddress addr = entry.ip();
-                if (addr.protocol() == QAbstractSocket::IPv4Protocol) {
-                    QString addrStr = addr.toString();
-                    // Check if we're on the FMS network (10.0.100.x)
-                    if (addrStr.startsWith("10.0.100.")) {
-                        m_fmsAddress = QHostAddress("10.0.100.5");
-                        Logger::instance().log("Detected FMS network, using address: " + m_fmsAddress.toString(), Logger::Info);
-                        return;
-                    }
-                }
-            }
-        }
+    if (m_connected) {
+        updateConnectionStatus(false);
+        Logger::instance().log(Logger::Warning, "FMS connection timeout");
+    }
+}
+
+void FMSHandler::processPacket(const QByteArray &data, const QHostAddress &sender)
+{
+    if (data.size() < 8) {
+        return; // Invalid packet size
     }
     
-    // Default FMS address if not detected
-    Logger::instance().log("Using default FMS address: " + m_fmsAddress.toString(), Logger::Info);
+    // Reset connection timeout
+    m_connectionTimer->start();
+    
+    if (!m_connected) {
+        updateConnectionStatus(true);
+    }
+    
+    parseControlPacket(data);
+    emit fmsDataReceived(data);
 }
 
-QHostAddress FMSHandler::getFMSAddress()
+void FMSHandler::updateConnectionStatus(bool connected)
 {
-    return QHostAddress("10.0.100.5");
+    if (m_connected != connected) {
+        m_connected = connected;
+        emit connectionChanged(connected);
+    }
 }
 
-quint16 FMSHandler::getFMSPort()
+void FMSHandler::parseControlPacket(const QByteArray &data)
 {
-    return 1750;
+    QDataStream stream(data);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    quint16 packetNumber;
+    quint8 matchType;
+    quint16 matchNumber;
+    quint8 playNumber;
+    quint16 timeRemaining;
+    quint8 controlByte;
+    
+    stream >> packetNumber >> matchType >> matchNumber >> playNumber >> timeRemaining >> controlByte;
+    
+    // Parse control byte
+    bool enabled = (controlByte & 0x01) != 0;
+    bool autonomous = (controlByte & 0x02) != 0;
+    bool test = (controlByte & 0x04) != 0;
+    bool emergencyStop = (controlByte & 0x80) != 0;
+    AllianceColor alliance = (controlByte & 0x08) ? Blue : Red;
+    
+    // Update match state
+    MatchState newState;
+    if (emergencyStop || !enabled) {
+        newState = Disabled;
+    } else if (test) {
+        newState = Test;
+    } else if (autonomous) {
+        newState = Autonomous;
+    } else {
+        newState = Teleop;
+    }
+    
+    // Emit changes
+    if (m_matchState != newState) {
+        m_matchState = newState;
+        emit matchStateChanged(newState);
+    }
+    
+    if (m_allianceColor != alliance) {
+        m_allianceColor = alliance;
+        emit allianceColorChanged(alliance);
+    }
+    
+    if (m_matchNumber != matchNumber) {
+        m_matchNumber = matchNumber;
+        emit matchNumberChanged(matchNumber);
+    }
+    
+    if (m_matchTime != timeRemaining) {
+        m_matchTime = timeRemaining;
+        emit matchTimeChanged(timeRemaining);
+    }
+    
+    if (m_enabled != enabled) {
+        m_enabled = enabled;
+        emit enabledChanged(enabled);
+    }
+    
+    if (m_emergencyStop != emergencyStop) {
+        m_emergencyStop = emergencyStop;
+        emit emergencyStopChanged(emergencyStop);
+    }
+}
+
+void FMSHandler::sendStatusPacket()
+{
+    QByteArray packet;
+    QDataStream stream(&packet, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    // FMS status packet format
+    stream << quint16(m_teamNumber);  // Team number
+    stream << quint8(0x01);           // Packet type (status)
+    stream << quint8(0x00);           // Reserved
+    stream << quint32(QDateTime::currentSecsSinceEpoch()); // Timestamp
+    stream << quint8(0x00);           // Status flags
+    stream << quint8(0x00);           // Reserved
+    
+    m_socket->writeDatagram(packet, m_fmsAddress, m_fmsPort);
 }
