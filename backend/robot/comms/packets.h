@@ -1,233 +1,187 @@
-#ifndef PACKETS_H
-#define PACKETS_H
+#ifndef ROBOT_COMMS_PACKETS_H
+#define ROBOT_COMMS_PACKETS_H
 
+#include <QObject>
 #include <QByteArray>
-#include <QList>
-#include <QtGlobal>
-
-namespace FRCDriverStation {
-namespace Protocol {
-
-// Protocol constants
-namespace Constants {
-    constexpr quint16 DS_TO_ROBOT_PORT = 1110;
-    constexpr quint16 ROBOT_TO_DS_PORT = 1150;
-    constexpr quint16 ROBOT_CONSOLE_PORT = 6666;
-    constexpr int PACKET_TIMEOUT_MS = 2000;
-}
-
-// Control flags for DS to Robot packets
-namespace ControlFlags {
-    constexpr quint8 ENABLED = 0x01;
-    constexpr quint8 AUTONOMOUS = 0x02;
-    constexpr quint8 TEST_MODE = 0x04;
-    constexpr quint8 EMERGENCY_STOP = 0x08;
-    constexpr quint8 FMS_ATTACHED = 0x10;
-    constexpr quint8 DS_ATTACHED = 0x20;
-}
-
-// Request types
-namespace RequestType {
-    constexpr quint8 NORMAL = 0x00;
-    constexpr quint8 REBOOT = 0x01;
-    constexpr quint8 RESTART_CODE = 0x02;
-}
-
-// Joystick data structures
-struct JoystickAxes {
-    float axes[6] = {0.0f}; // Up to 6 axes per joystick
-    
-    void setAxis(int index, float value) {
-        if (index >= 0 && index < 6) {
-            axes[index] = qBound(-1.0f, value, 1.0f);
-        }
-    }
-    
-    float getAxis(int index) const {
-        return (index >= 0 && index < 6) ? axes[index] : 0.0f;
-    }
-};
-
-struct JoystickButtons {
-    quint16 buttons = 0; // Up to 16 buttons per joystick
-    
-    void setButton(int index, bool pressed) {
-        if (index >= 0 && index < 16) {
-            if (pressed) {
-                buttons |= (1 << index);
-            } else {
-                buttons &= ~(1 << index);
-            }
-        }
-    }
-    
-    bool getButton(int index) const {
-        return (index >= 0 && index < 16) ? ((buttons >> index) & 1) != 0 : false;
-    }
-};
-
-struct JoystickPOVs {
-    qint16 povs[4] = {-1, -1, -1, -1}; // Up to 4 POVs per joystick, -1 = not pressed
-    
-    void setPOV(int index, qint16 angle) {
-        if (index >= 0 && index < 4) {
-            povs[index] = angle;
-        }
-    }
-    
-    qint16 getPOV(int index) const {
-        return (index >= 0 && index < 4) ? povs[index] : -1;
-    }
-};
-
-struct JoystickData {
-    JoystickAxes axes;
-    JoystickButtons buttons;
-    JoystickPOVs povs;
-    
-    JoystickData() = default;
-    
-    // Create neutral joystick data
-    static JoystickData neutral() {
-        return JoystickData();
-    }
-};
-
-// DS to Robot packet header
-struct DSToRobotHeader {
-    quint16 packetIndex = 0;
-    quint8 control = 0;
-    quint8 request = RequestType::NORMAL;
-    quint8 station = 0; // Alliance station (0-5: Red1, Red2, Red3, Blue1, Blue2, Blue3)
-    
-    // Helper methods
-    bool isEnabled() const { return (control & ControlFlags::ENABLED) != 0; }
-    bool isAutonomous() const { return (control & ControlFlags::AUTONOMOUS) != 0; }
-    bool isTest() const { return (control & ControlFlags::TEST_MODE) != 0; }
-    bool isEmergencyStop() const { return (control & ControlFlags::EMERGENCY_STOP) != 0; }
-    bool isFMSAttached() const { return (control & ControlFlags::FMS_ATTACHED) != 0; }
-    
-    void setEnabled(bool enabled) {
-        if (enabled) control |= ControlFlags::ENABLED;
-        else control &= ~ControlFlags::ENABLED;
-    }
-    
-    void setAutonomous(bool autonomous) {
-        if (autonomous) control |= ControlFlags::AUTONOMOUS;
-        else control &= ~ControlFlags::AUTONOMOUS;
-    }
-    
-    void setTest(bool test) {
-        if (test) control |= ControlFlags::TEST_MODE;
-        else control &= ~ControlFlags::TEST_MODE;
-    }
-    
-    void setEmergencyStop(bool estop) {
-        if (estop) control |= ControlFlags::EMERGENCY_STOP;
-        else control &= ~ControlFlags::EMERGENCY_STOP;
-    }
-    
-    void setFMSAttached(bool attached) {
-        if (attached) control |= ControlFlags::FMS_ATTACHED;
-        else control &= ~ControlFlags::FMS_ATTACHED;
-    }
-};
-
-// Robot to DS packet header
-struct RobotToDSHeader {
-    quint16 packetIndex = 0;
-    quint8 control = 0;
-    quint8 status = 0;
-    quint16 voltage = 0; // Battery voltage in millivolts
-    
-    // Helper methods
-    double getVoltage() const { return voltage / 1000.0; }
-    void setVoltage(double volts) { voltage = static_cast<quint16>(volts * 1000); }
-    
-    bool isEnabled() const { return (control & ControlFlags::ENABLED) != 0; }
-    bool isAutonomous() const { return (control & ControlFlags::AUTONOMOUS) != 0; }
-    bool isTest() const { return (control & ControlFlags::TEST_MODE) != 0; }
-    bool isEmergencyStop() const { return (control & ControlFlags::EMERGENCY_STOP) != 0; }
-};
-
-// Robot diagnostics data
-struct RobotDiagnostics {
-    quint8 cpuUsage = 0;        // CPU usage percentage (0-100)
-    quint8 ramUsage = 0;        // RAM usage percentage (0-100)
-    quint8 diskUsage = 0;       // Disk usage percentage (0-100)
-    quint16 canUtilization = 0; // CAN utilization in 0.1% units
-    quint8 canBusOffCount = 0;  // Number of CAN bus-off events
-    quint8 robotCodeStatus = 0; // 0 = no code, 1 = code running
-    
-    // Helper methods
-    double getCanUtilPercent() const { return canUtilization / 10.0; }
-    void setCanUtilPercent(double percent) { canUtilization = static_cast<quint16>(percent * 10); }
-};
-
-// Match timing information
-struct MatchTiming {
-    quint8 matchPhase = 0;          // 0=pre, 1=auto, 2=teleop, 3=endgame, 4=post
-    quint16 matchTimeRemaining = 0; // Time remaining in seconds
-    
-    enum Phase {
-        PreMatch = 0,
-        Autonomous = 1,
-        Teleop = 2,
-        Endgame = 3,
-        PostMatch = 4
-    };
-};
+#include <QDataStream>
+#include <QDateTime>
+#include <QHostAddress>
+#include <QMutex>
+#include "../../core/constants.h"
 
 /**
- * @brief Packet builder and parser utilities
+ * @brief Handles FRC robot communication packets
  * 
- * Provides methods to build and parse FRC protocol packets.
- * All methods are static and thread-safe.
+ * This class manages the creation, parsing, and validation of FRC protocol packets
+ * used for robot communication, including driver station to robot and robot to
+ * driver station packets.
  */
-class PacketBuilder
+class RobotPackets : public QObject
 {
+    Q_OBJECT
+
 public:
-    /**
-     * @brief Build a complete DS to Robot packet
-     * @param header Packet header with control information
-     * @param joysticks List of joystick data (up to 6 joysticks)
-     * @return Complete packet as byte array
-     */
-    static QByteArray buildDSPacket(const DSToRobotHeader &header, 
-                                   const QList<JoystickData> &joysticks);
-    
-    /**
-     * @brief Parse a Robot to DS packet
-     * @param data Raw packet data
-     * @param header Output header structure
-     * @param diagnostics Output diagnostics structure
-     * @param timing Output timing structure
-     * @return true if packet was parsed successfully
-     */
-    static bool parseRobotPacket(const QByteArray &data,
-                                RobotToDSHeader &header,
-                                RobotDiagnostics &diagnostics,
-                                MatchTiming &timing);
-    
-    /**
-     * @brief Validate packet checksum
-     * @param data Packet data including checksum
-     * @return true if checksum is valid
-     */
-    static bool validateChecksum(const QByteArray &data);
-    
-    /**
-     * @brief Calculate packet checksum
-     * @param data Packet data without checksum
-     * @return Calculated checksum
-     */
-    static quint16 calculateChecksum(const QByteArray &data);
+    // Packet types
+    enum PacketType {
+        DriverStationToRobot = 0x00,
+        RobotToDriverStation = 0x01,
+        JoystickData = 0x02,
+        TimestampData = 0x03,
+        DisableData = 0x04,
+        TaggedData = 0x05
+    };
+    Q_ENUM(PacketType)
+
+    // Robot modes
+    enum RobotMode {
+        Disabled = 0x00,
+        Autonomous = 0x01,
+        Teleop = 0x02,
+        Test = 0x03
+    };
+    Q_ENUM(RobotMode)
+
+    // Control flags
+    enum ControlFlags {
+        Enabled = 0x01,
+        Autonomous_Flag = 0x02,
+        Test_Flag = 0x04,
+        EmergencyStop = 0x08,
+        FMSAttached = 0x10,
+        DSAttached = 0x20
+    };
+    Q_FLAGS(ControlFlags)
+
+    // Joystick data structure
+    struct JoystickData {
+        quint8 axes[6];          // 6 axes, values 0-255
+        quint16 buttons;         // 16 buttons as bitmask
+        quint8 povs[4];          // 4 POV hats, values 0-8 (8 = not pressed)
+        
+        JoystickData() {
+            memset(axes, 128, sizeof(axes)); // Center position
+            buttons = 0;
+            memset(povs, 8, sizeof(povs)); // Not pressed
+        }
+    };
+
+    // Driver station packet structure
+    struct DriverStationPacket {
+        quint16 packetIndex;
+        quint8 generalData;
+        quint8 dsDigitalIn;
+        quint16 teamNumber;
+        quint8 dsID_Alliance;
+        quint8 dsID_Position;
+        JoystickData joysticks[6]; // Up to 6 joysticks
+        quint16 crc;
+        
+        DriverStationPacket() {
+            packetIndex = 0;
+            generalData = 0;
+            dsDigitalIn = 0;
+            teamNumber = 0;
+            dsID_Alliance = 0;
+            dsID_Position = 0;
+            crc = 0;
+        }
+    };
+
+    // Robot status packet structure
+    struct RobotStatusPacket {
+        quint16 packetIndex;
+        quint8 generalData;
+        quint8 robotDigitalOut;
+        quint16 batteryVoltage; // In millivolts
+        quint8 canUtilization;
+        quint8 wifiDB;
+        quint8 wifiMB;
+        quint16 crc;
+        
+        RobotStatusPacket() {
+            packetIndex = 0;
+            generalData = 0;
+            robotDigitalOut = 0;
+            batteryVoltage = 0;
+            canUtilization = 0;
+            wifiDB = 0;
+            wifiMB = 0;
+            crc = 0;
+        }
+    };
+
+    explicit RobotPackets(QObject *parent = nullptr);
+    ~RobotPackets();
+
+    // Packet creation methods
+    QByteArray createDriverStationPacket(const DriverStationPacket& packet);
+    QByteArray createJoystickPacket(const JoystickData joysticks[], int count);
+    QByteArray createDisablePacket();
+    QByteArray createEmergencyStopPacket();
+    QByteArray createTimestampPacket();
+
+    // Packet parsing methods
+    bool parseRobotStatusPacket(const QByteArray& data, RobotStatusPacket& packet);
+    bool parseIncomingPacket(const QByteArray& data, PacketType& type);
+    bool validatePacket(const QByteArray& data);
+
+    // Utility methods
+    static quint16 calculateCRC(const QByteArray& data);
+    static bool verifyCRC(const QByteArray& data);
+    static QByteArray addCRC(const QByteArray& data);
+
+    // Getters
+    quint16 getNextPacketIndex();
+    quint32 getPacketsSent() const { return m_packetsSent; }
+    quint32 getPacketsReceived() const { return m_packetsReceived; }
+    quint32 getPacketsDropped() const { return m_packetsDropped; }
+
+    // Statistics
+    void resetStatistics();
+    double getPacketLossRate() const;
+
+public slots:
+    void setTeamNumber(quint16 teamNumber);
+    void setRobotMode(RobotMode mode);
+    void setEnabled(bool enabled);
+    void setEmergencyStop(bool emergencyStop);
+    void setFMSAttached(bool attached);
+
+signals:
+    void packetSent(PacketType type, int size);
+    void packetReceived(PacketType type, int size);
+    void packetDropped(const QString& reason);
+    void robotStatusUpdated(const RobotStatusPacket& status);
 
 private:
-    PacketBuilder() = delete; // Static class only
+    // Packet state
+    quint16 m_packetIndex;
+    quint16 m_teamNumber;
+    RobotMode m_robotMode;
+    bool m_enabled;
+    bool m_emergencyStop;
+    bool m_fmsAttached;
+    
+    // Statistics
+    quint32 m_packetsSent;
+    quint32 m_packetsReceived;
+    quint32 m_packetsDropped;
+    QDateTime m_statisticsStartTime;
+    
+    // Thread safety
+    mutable QMutex m_mutex;
+    
+    // Helper methods
+    void updateGeneralData(quint8& generalData);
+    bool isValidPacketSize(PacketType type, int size);
+    void logPacketInfo(const QString& direction, PacketType type, int size);
+    
+    // CRC calculation table
+    static const quint16 CRC_TABLE[256];
+    static void initializeCRCTable();
+    static bool s_crcTableInitialized;
 };
 
-} // namespace Protocol
-} // namespace FRCDriverStation
+Q_DECLARE_OPERATORS_FOR_FLAGS(RobotPackets::ControlFlags)
 
-#endif // PACKETS_H
+#endif // ROBOT_COMMS_PACKETS_H

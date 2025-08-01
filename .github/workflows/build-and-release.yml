@@ -64,22 +64,45 @@ jobs:
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v1.3
     
-    - name: Install qpmx
+    - name: Clone QHotkey
       run: |
-        git clone https://github.com/Skycoder42/qpmx.git
-        cd qpmx
-        qmake
-        nmake
-        nmake install
-        cd ..
+        mkdir -p thirdparty
+        cd thirdparty
+        git clone https://github.com/Skycoder42/QHotkey.git
+        cd QHotkey
+        git checkout 1.5.0
+        cd ../..
     
-    - name: Install dependencies
+    - name: Create QHotkey project file
       run: |
-        mkdir vendor
-        cd vendor
-        qpmx init
-        qpmx install de.skycoder42.qhotkey
-        cd ..
+        $qhotkeyPro = @"
+        QT += core gui
+        CONFIG += c++11 staticlib
+        
+        TARGET = QHotkey
+        TEMPLATE = lib
+        
+        SOURCES += \
+            qhotkey.cpp \
+            qhotkey_p.cpp \
+            qhotkey_win.cpp
+        
+        HEADERS += \
+            qhotkey.h \
+            qhotkey_p.h
+        
+        LIBS += -luser32
+        
+        DESTDIR = `$`$OUT_PWD
+        "@
+        $qhotkeyPro | Out-File -FilePath "thirdparty\QHotkey\QHotkey.pro" -Encoding UTF8
+    
+    - name: Build QHotkey
+      run: |
+        cd thirdparty/QHotkey
+        qmake QHotkey.pro CONFIG+=release
+        nmake
+        cd ../..
     
     - name: Build application
       run: |
@@ -120,22 +143,44 @@ jobs:
         arch: clang_64
         modules: 'qtnetworkauth qtmultimedia'
     
-    - name: Install qpmx
+    - name: Clone QHotkey
       run: |
-        git clone https://github.com/Skycoder42/qpmx.git
-        cd qpmx
-        qmake
-        make
-        sudo make install
-        cd ..
+        mkdir -p thirdparty
+        cd thirdparty
+        git clone https://github.com/Skycoder42/QHotkey.git
+        cd QHotkey
+        git checkout 1.5.0
+        cd ../..
     
-    - name: Install dependencies
+    - name: Create QHotkey project file
       run: |
-        mkdir vendor
-        cd vendor
-        qpmx init
-        qpmx install de.skycoder42.qhotkey
-        cd ..
+        cat > thirdparty/QHotkey/QHotkey.pro << 'EOF'
+        QT += core gui
+        CONFIG += c++11 staticlib
+        
+        TARGET = QHotkey
+        TEMPLATE = lib
+        
+        SOURCES += \
+            qhotkey.cpp \
+            qhotkey_p.cpp \
+            qhotkey_mac.cpp
+        
+        HEADERS += \
+            qhotkey.h \
+            qhotkey_p.h
+        
+        LIBS += -framework Carbon -framework ApplicationServices
+        
+        DESTDIR = $$OUT_PWD
+        EOF
+    
+    - name: Build QHotkey
+      run: |
+        cd thirdparty/QHotkey
+        qmake QHotkey.pro CONFIG+=release
+        make -j$(sysctl -n hw.ncpu)
+        cd ../..
     
     - name: Build application
       run: |
@@ -170,7 +215,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libudev-dev libgl1-mesa-dev libxkbcommon-dev
+        sudo apt-get install -y libudev-dev libgl1-mesa-dev libxkbcommon-dev libx11-dev libxtst-dev
     
     - name: Install Qt
       uses: jurplel/install-qt-action@v3
@@ -181,22 +226,44 @@ jobs:
         arch: gcc_64
         modules: 'qtnetworkauth qtmultimedia'
     
-    - name: Install qpmx
+    - name: Clone QHotkey
       run: |
-        git clone https://github.com/Skycoder42/qpmx.git
-        cd qpmx
-        qmake
-        make
-        sudo make install
-        cd ..
+        mkdir -p thirdparty
+        cd thirdparty
+        git clone https://github.com/Skycoder42/QHotkey.git
+        cd QHotkey
+        git checkout 1.5.0
+        cd ../..
     
-    - name: Install dependencies
+    - name: Create QHotkey project file
       run: |
-        mkdir vendor
-        cd vendor
-        qpmx init
-        qpmx install de.skycoder42.qhotkey
-        cd ..
+        cat > thirdparty/QHotkey/QHotkey.pro << 'EOF'
+        QT += core gui x11extras
+        CONFIG += c++11 staticlib
+        
+        TARGET = QHotkey
+        TEMPLATE = lib
+        
+        SOURCES += \
+            qhotkey.cpp \
+            qhotkey_p.cpp \
+            qhotkey_x11.cpp
+        
+        HEADERS += \
+            qhotkey.h \
+            qhotkey_p.h
+        
+        LIBS += -lX11
+        
+        DESTDIR = $$OUT_PWD
+        EOF
+    
+    - name: Build QHotkey
+      run: |
+        cd thirdparty/QHotkey
+        qmake QHotkey.pro CONFIG+=release
+        make -j$(nproc)
+        cd ../..
     
     - name: Build application
       run: |
@@ -329,6 +396,15 @@ jobs:
         host: linux
         target: desktop
         arch: gcc_64
+    
+    - name: Clone QHotkey for test
+      run: |
+        mkdir -p thirdparty
+        cd thirdparty
+        git clone https://github.com/Skycoder42/QHotkey.git
+        cd QHotkey
+        git checkout 1.5.0
+        cd ../..
     
     - name: Test build configuration
       run: |

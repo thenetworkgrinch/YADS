@@ -9,8 +9,10 @@
 #include <QHostAddress>
 
 #ifdef ENABLE_GLOBAL_SHORTCUTS
-#include <QHotkey>
+#ifdef QHOTKEY_AVAILABLE
+#include <qhotkey.h>
 #include <QPointer>
+#endif
 #endif
 
 #include "core/logger.h"
@@ -182,7 +184,7 @@ private slots:
     void onFMSModeChanged(int mode);
 #endif
 
-#ifdef ENABLE_GLOBAL_SHORTCUTS
+#if defined(ENABLE_GLOBAL_SHORTCUTS) && defined(QHOTKEY_AVAILABLE)
     // Global shortcut handlers
     void onEmergencyStopShortcut();
     void onDisableRobotShortcut();
@@ -231,7 +233,7 @@ private:
     FMSHandler* m_fmsHandler;
 #endif
 
-#ifdef ENABLE_GLOBAL_SHORTCUTS
+#if defined(ENABLE_GLOBAL_SHORTCUTS) && defined(QHOTKEY_AVAILABLE)
     // Global shortcuts
     QPointer<QHotkey> m_emergencyStopHotkey;
     QPointer<QHotkey> m_disableRobotHotkey;
@@ -251,7 +253,7 @@ private:
     void saveSettings();
     void loadSettings();
 
-#ifdef ENABLE_GLOBAL_SHORTCUTS
+#if defined(ENABLE_GLOBAL_SHORTCUTS) && defined(QHOTKEY_AVAILABLE)
     void setupGlobalShortcuts();
     void cleanupGlobalShortcuts();
     void registerGlobalShortcut(QHotkey*& hotkey, const QKeySequence& sequence, 

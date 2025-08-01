@@ -1,12 +1,12 @@
 #include "robotstate.h"
-#include "robot/comms/communicationhandler.h"
+#include "comms/communicationhandler.h"
 #include "controllers/controllerhidhandler.h"
 #include "managers/battery_manager.h"
 #include "managers/practice_match_manager.h"
 #include "managers/network_manager.h"
 
 #ifdef ENABLE_FMS_SUPPORT
-#include "robot/comms/fms/fmshandler.h"
+#include "fms/fmshandler.h"
 #endif
 
 #include <QApplication>
@@ -17,6 +17,7 @@
 #include <QThread>
 #include <QMutexLocker>
 #include <QHostAddress>
+#include <QProcess>
 
 RobotState::RobotState(QObject *parent)
     : QObject(parent)
@@ -46,7 +47,7 @@ RobotState::RobotState(QObject *parent)
 #ifdef ENABLE_FMS_SUPPORT
     , m_fmsHandler(nullptr)
 #endif
-#ifdef ENABLE_GLOBAL_SHORTCUTS
+#if defined(ENABLE_GLOBAL_SHORTCUTS) && defined(QHOTKEY_AVAILABLE)
     , m_emergencyStopHotkey(nullptr)
     , m_disableRobotHotkey(nullptr)
     , m_enableRobotHotkey(nullptr)
@@ -68,7 +69,7 @@ RobotState::RobotState(QObject *parent)
     // Setup timers
     setupTimers();
     
-#ifdef ENABLE_GLOBAL_SHORTCUTS
+#if defined(ENABLE_GLOBAL_SHORTCUTS) && defined(QHOTKEY_AVAILABLE)
     // Setup global shortcuts if enabled
     if (m_globalShortcutsEnabled) {
         setupGlobalShortcuts();
@@ -90,7 +91,7 @@ RobotState::~RobotState()
     // Save current settings
     saveSettings();
     
-#ifdef ENABLE_GLOBAL_SHORTCUTS
+#if defined(ENABLE_GLOBAL_SHORTCUTS) && defined(QHOTKEY_AVAILABLE)
     // Cleanup global shortcuts
     cleanupGlobalShortcuts();
 #endif
@@ -188,7 +189,7 @@ void RobotState::setupTimers()
     Logger::instance().log(Logger::Info, "RobotState", "Timers configured");
 }
 
-#ifdef ENABLE_GLOBAL_SHORTCUTS
+#if defined(ENABLE_GLOBAL_SHORTCUTS) && defined(QHOTKEY_AVAILABLE)
 void RobotState::setupGlobalShortcuts()
 {
     Logger::instance().log(Logger::Info, "RobotState", "Setting up global shortcuts");
@@ -368,7 +369,7 @@ void RobotState::setGlobalShortcutsEnabled(bool enabled)
         Logger::instance().log(Logger::Info, "RobotState", 
                               QString("Global shortcuts %1").arg(enabled ? "enabled" : "disabled"));
         
-#ifdef ENABLE_GLOBAL_SHORTCUTS
+#if defined(ENABLE_GLOBAL_SHORTCUTS) && defined(QHOTKEY_AVAILABLE)
         if (enabled) {
             setupGlobalShortcuts();
         } else {

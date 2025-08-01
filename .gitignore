@@ -1,4 +1,4 @@
-# Qt-specific files
+# Qt-specific
 *.pro.user
 *.pro.user.*
 *.qbs.user
@@ -16,6 +16,7 @@ Makefile*
 .qmake.stash
 
 # Qt Creator
+CMakeLists.txt.user*
 *.autosave
 
 # Build directories
@@ -23,122 +24,114 @@ build/
 build-*/
 debug/
 release/
-Debug/
-Release/
 
-# CMake
-CMakeLists.txt.user
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CTestTestfile.cmake
-_deps
+# Object files
+*.o
+*.obj
 
-# Visual Studio
-.vs/
-*.vcxproj
-*.vcxproj.filters
-*.vcxproj.user
-*.sln
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.dll.a
 
-# Xcode
-*.xcodeproj/
-*.xcworkspace/
-DerivedData/
-*.hmap
-*.ipa
-*.dSYM.zip
-*.dSYM
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
 
-# macOS
-.DS_Store
-.AppleDouble
-.LSOverride
-Icon?
-._*
-.DocumentRevisions-V100
-.fseventsd
-.Spotlight-V100
-.TemporaryItems
-.Trashes
-.VolumeIcon.icns
-.com.apple.timemachine.donotpresent
-.AppleDB
-.AppleDesktop
-Network Trash Folder
-Temporary Items
-.apdisk
+# Executables
+*.exe
+*.out
+*.app
 
-# Windows
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
-*.cab
-*.msi
-*.msm
-*.msp
-*.lnk
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
 
-# Linux
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
 *~
-.fuse_hidden*
-.directory
-.Trash-*
-.nfs*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # Temporary files
 *.tmp
 *.temp
 *.log
-*.swp
-*.swo
-*~
+*.bak
+*.backup
+*.orig
 
-# IDE files
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
+# Third-party dependencies
+thirdparty/QHotkey/
+!thirdparty/QHotkey/QHotkey.pro
 
 # Package files
 *.dmg
-*.pkg
+*.zip
+*.tar.gz
 *.deb
 *.rpm
-*.tar.gz
-*.zip
-*.7z
 
-# Generated documentation
-doc/
-docs/html/
-docs/latex/
+# Configuration files (keep templates)
+*.ini
+!*.ini.template
 
-# Test results
-test-results/
+# Log files
+logs/
+*.log
+
+# Cache directories
+cache/
+.cache/
+
+# Node modules (if any web components)
+node_modules/
+
+# Python bytecode (if any Python scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Coverage reports
 *.gcov
 *.gcda
 *.gcno
+coverage/
 
 # Profiling data
 *.prof
-*.pprof
+
+# Memory dumps
+*.dmp
 
 # Core dumps
 core
 core.*
 
-# Application-specific
-logs/
-*.db
-*.sqlite
-*.sqlite3
-config.ini
-settings.ini
+# Crash logs
+crash_*.log

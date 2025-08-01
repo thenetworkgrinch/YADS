@@ -1,143 +1,126 @@
-#ifndef FMSHANDLER_H
-#define FMSHANDLER_H
-
-#include "../../../core/constants.h"
-
-#ifdef ENABLE_FMS_SUPPORT
+#ifndef ROBOT_COMMS_FMS_FMSHANDLER_H
+#define ROBOT_COMMS_FMS_FMSHANDLER_H
 
 #include <QObject>
-#include <QTimer>
-#include <QTcpSocket>
 #include <QUdpSocket>
+#include <QTimer>
 #include <QHostAddress>
 #include <QDateTime>
-#include <memory>
-
-namespace FRCDriverStation {
-
-class Logger;
+#include <QMutex>
+#include "../../../core/logger.h"
 
 /**
- * @brief Handles FMS (Field Management System) connection detection and management
+ * @brief Handles FMS (Field Management System) communication for robot comms
  * 
- * The FMS handler monitors for FMS presence on the network and manages
- * the connection state. It detects when FMS comes online during a match
- * and when it disconnects after the match ends.
- * 
- * Design principles:
- * - Single responsibility: Only handles FMS communication
- * - Fail fast: Clear error reporting and recovery
- * - Non-blocking: All operations are asynchronous
- * - Observable: Emits clear state change signals
+ * This class manages communication with the FMS during official matches,
+ * receiving match state information and robot control commands.
+ * This is the robot communication specific version.
  */
 class FMSHandler : public QObject
 {
     Q_OBJECT
 
 public:
-    enum FMSState {
-        Disconnected = 0,
-        Detecting = 1,
-        Connected = 2,
-        Error = 3
+    enum MatchType {
+        None = 0,
+        Practice = 1,
+        Qualification = 2,
+        Elimination = 3
     };
-    Q_ENUM(FMSState)
+    Q_ENUM(MatchType)
 
-    explicit FMSHandler(std::shared_ptr<Logger> logger, QObject *parent = nullptr);
+    enum MatchPhase {
+        PreMatch = 0,
+        Autonomous = 1,
+        Teleop = 2,
+        PostMatch = 3
+    };
+    Q_ENUM(MatchPhase)
+
+    struct MatchInfo {
+        MatchType type = None;
+        int matchNumber = 0;
+        int replayNumber = 0;
+        QString eventName;
+        QDateTime startTime;
+    };
+
+    struct MatchState {
+        MatchPhase phase = PreMatch;
+        bool enabled = false;
+        bool emergencyStop = false;
+        int timeRemaining = 0;
+        QDateTime timestamp;
+    };
+
+    explicit FMSHandler(QObject *parent = nullptr);
     ~FMSHandler();
 
-    // State queries
-    FMSState currentState() const { return m_currentState; }
-    bool isConnected() const { return m_currentState == Connected; }
-    int currentMatchNumber() const { return m_currentMatchNumber; }
-    QString currentMatchType() const { return m_currentMatchType; }
+    // Getters
+    bool isConnected() const { return m_connected; }
+    MatchInfo currentMatch() const { return m_currentMatch; }
+    MatchState currentState() const { return m_currentState; }
     QHostAddress fmsAddress() const { return m_fmsAddress; }
-    qint64 timeSinceLastContact() const;
+    int fmsPort() const { return m_fmsPort; }
 
     // Control methods
-    void startMonitoring();
-    void stopMonitoring();
+    void startListening();
+    void stopListening();
+    void setListenPort(int port);
+
+public slots:
+    void connectToFMS(const QHostAddress& address, int port = 1750);
+    void disconnectFromFMS();
+    void sendRobotStatus(bool enabled, bool emergencyStop, double batteryVoltage);
 
 signals:
-    void stateChanged(FMSState state, const QHostAddress &address);
-    void fmsConnected(const QHostAddress &address);
+    void fmsConnected();
     void fmsDisconnected();
-    void matchInfoReceived(int matchNumber, const QString &matchType);
-    void matchControlReceived(bool enabled, bool autonomous, bool test);
+    void fmsModeChanged(int mode);
+    void matchInfoReceived(const MatchInfo& info);
+    void matchStateChanged(const MatchState& state);
+    void fmsError(const QString& error);
 
 private slots:
-    void onDetectionTimerTimeout();
-    void onHeartbeatTimerTimeout();
-    void onFmsDataReceived();
-    void onFmsTcpConnected();
-    void onFmsTcpDisconnected();
-    void onFmsTcpError();
+    void onSocketReadyRead();
+    void onSocketError(QAbstractSocket::SocketError error);
+    void onHeartbeatTimeout();
+    void sendHeartbeat();
 
 private:
-    void detectFMS();
-    void connectToFMS(const QHostAddress &address);
-    void disconnectFromFMS();
-    void updateState(FMSState newState);
-    void parseFMSPacket(const QByteArray &data);
-    void sendHeartbeat();
-    QHostAddress findFMSAddress();
-
-    std::shared_ptr<Logger> m_logger;
-    
     // Network components
-    std::unique_ptr<QUdpSocket> m_detectionSocket;
-    std::unique_ptr<QTcpSocket> m_fmsSocket;
-    std::unique_ptr<QTimer> m_detectionTimer;
-    std::unique_ptr<QTimer> m_heartbeatTimer;
-    
-    // State tracking
-    FMSState m_currentState;
+    QUdpSocket* m_socket;
     QHostAddress m_fmsAddress;
-    qint64 m_lastContactTime;
-    int m_currentMatchNumber;
-    QString m_currentMatchType;
+    int m_fmsPort;
+    int m_listenPort;
+    
+    // Connection state
+    bool m_connected;
+    QDateTime m_lastHeartbeat;
+    QTimer* m_heartbeatTimer;
+    QTimer* m_timeoutTimer;
+    
+    // Match information
+    MatchInfo m_currentMatch;
+    MatchState m_currentState;
+    
+    // Thread safety
+    mutable QMutex m_mutex;
+    
+    // Packet processing
+    void processIncomingPacket(const QByteArray& data, const QHostAddress& sender);
+    void processMatchInfo(const QByteArray& data);
+    void processMatchState(const QByteArray& data);
+    void processControlCommand(const QByteArray& data);
+    
+    // Packet creation
+    QByteArray createHeartbeatPacket();
+    QByteArray createStatusPacket(bool enabled, bool emergencyStop, double batteryVoltage);
+    
+    // Helper methods
+    void updateConnectionState(bool connected);
+    void resetMatchInfo();
+    void logFMSEvent(const QString& event);
 };
 
-} // namespace FRCDriverStation
-
-#else // !ENABLE_FMS_SUPPORT
-
-// Stub implementation when FMS support is disabled
-namespace FRCDriverStation {
-
-class Logger;
-
-class FMSHandler : public QObject
-{
-    Q_OBJECT
-
-public:
-    enum FMSState { Disconnected = 0 };
-    Q_ENUM(FMSState)
-
-    explicit FMSHandler(std::shared_ptr<Logger>, QObject *parent = nullptr) : QObject(parent) {}
-    ~FMSHandler() = default;
-
-    FMSState currentState() const { return Disconnected; }
-    bool isConnected() const { return false; }
-    int currentMatchNumber() const { return -1; }
-    QString currentMatchType() const { return QString(); }
-    QHostAddress fmsAddress() const { return QHostAddress(); }
-    qint64 timeSinceLastContact() const { return -1; }
-
-    void startMonitoring() {}
-    void stopMonitoring() {}
-
-signals:
-    void stateChanged(FMSState, const QHostAddress &);
-    void fmsConnected(const QHostAddress &);
-    void fmsDisconnected();
-    void matchInfoReceived(int, const QString &);
-    void matchControlReceived(bool, bool, bool);
-};
-
-} // namespace FRCDriverStation
-
-#endif // ENABLE_FMS_SUPPORT
-
-#endif // FMSHANDLER_H
+#endif // ROBOT_COMMS_FMS_FMSHANDLER_H

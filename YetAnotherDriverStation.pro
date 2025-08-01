@@ -19,10 +19,24 @@ QMAKE_TARGET_COPYRIGHT = "Copyright (c) 2025 FRC Community"
 !CONFIG(no_practice_match): DEFINES += ENABLE_PRACTICE_MATCH=1
 !CONFIG(no_global_shortcuts): DEFINES += ENABLE_GLOBAL_SHORTCUTS=1
 
-# QHotkey dependency via qpmx
+# QHotkey third-party library
 !CONFIG(no_global_shortcuts) {
-    include($$PWD/vendor/qpmx/qpmx.pri)
-    QPMX_DEPENDENCIES += de.skycoder42.qhotkey
+    exists(thirdparty/QHotkey/QHotkey.pro) {
+        SUBDIRS += thirdparty/QHotkey
+        INCLUDEPATH += thirdparty/QHotkey
+        DEPENDPATH += thirdparty/QHotkey
+        
+        # Link against QHotkey
+        LIBS += -L$$OUT_PWD/thirdparty/QHotkey -lQHotkey
+        
+        # Ensure QHotkey is built first
+        PRE_TARGETDEPS += $$OUT_PWD/thirdparty/QHotkey/libQHotkey.a
+        
+        DEFINES += QHOTKEY_AVAILABLE
+    } else {
+        warning("QHotkey not found in thirdparty/QHotkey. Global shortcuts will be disabled.")
+        DEFINES -= ENABLE_GLOBAL_SHORTCUTS
+    }
 }
 
 # Source files
@@ -121,3 +135,8 @@ CONFIG(release, debug|release) {
     RCC_DIR = build/release/rcc
     UI_DIR = build/release/ui
 }
+
+# Create thirdparty directory structure
+thirdparty_setup.commands = $$quote(mkdir -p thirdparty)
+QMAKE_EXTRA_TARGETS += thirdparty_setup
+PRE_TARGETDEPS += thirdparty_setup
