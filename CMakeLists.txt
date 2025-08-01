@@ -69,9 +69,6 @@ set(SOURCES
     backend/managers/battery_manager.cpp
     backend/managers/practice_match_manager.cpp
     backend/managers/network_manager.cpp
-    backend/managers/application_manager.cpp
-    backend/comms/communicationhandler.cpp
-    backend/comms/packets.cpp
 )
 
 # Define header files
@@ -88,9 +85,6 @@ set(HEADERS
     backend/managers/battery_manager.h
     backend/managers/practice_match_manager.h
     backend/managers/network_manager.h
-    backend/managers/application_manager.h
-    backend/comms/communicationhandler.h
-    backend/comms/packets.h
 )
 
 # Create the executable first
