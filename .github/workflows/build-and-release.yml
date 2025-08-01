@@ -45,17 +45,23 @@ jobs:
       matrix:
         include:
           - os: windows-latest
+            name: Windows
             qt_arch: win64_msvc2019_64
-            cmake_preset: windows-release
             artifact_name: YetAnotherDriverStation-Windows
+            cmake_generator: "Visual Studio 17 2022"
+            cmake_arch: "-A x64"
           - os: ubuntu-latest
+            name: Linux
             qt_arch: gcc_64
-            cmake_preset: linux-release
             artifact_name: YetAnotherDriverStation-Linux
+            cmake_generator: "Ninja"
+            cmake_arch: ""
           - os: macos-latest
+            name: macOS
             qt_arch: clang_64
-            cmake_preset: macos-release
             artifact_name: YetAnotherDriverStation-macOS
+            cmake_generator: "Ninja"
+            cmake_arch: ""
 
     runs-on: ${{ matrix.os }}
     name: Build on ${{ matrix.name }}
@@ -71,18 +77,34 @@ jobs:
         git clone --depth 1 https://github.com/Skycoder42/QHotkey.git thirdparty/QHotkey
 
     - name: Install Qt
-      uses: jurplel/install-qt-action@v3
+      uses: jurplel/install-qt-action@v3.3.0
       with:
         version: ${{ env.QT_VERSION }}
+        host: ${{ runner.os == 'Linux' && 'linux' || runner.os == 'Windows' && 'windows' || 'mac' }}
+        target: desktop
         arch: ${{ matrix.qt_arch }}
         cache: true
-        modules: 'qtnetworkauth qtmultimedia'
+        modules: 'qtnetworkauth qtmultimedia qtcharts'
+        tools: 'tools_cmake'
 
     - name: Install system dependencies (Linux)
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libudev-dev libgl1-mesa-dev libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0
+        sudo apt-get install -y \
+          libudev-dev \
+          libgl1-mesa-dev \
+          libxkbcommon-x11-0 \
+          libxcb-icccm4 \
+          libxcb-image0 \
+          libxcb-keysyms1 \
+          libxcb-randr0 \
+          libxcb-render-util0 \
+          libxcb-xinerama0 \
+          libxcb-xfixes0 \
+          libx11-dev \
+          libxtst-dev \
+          ninja-build
 
     - name: Setup MSVC (Windows)
       if: runner.os == 'Windows'
@@ -90,47 +112,69 @@ jobs:
       with:
         arch: x64
 
+    - name: Install Ninja (macOS)
+      if: runner.os == 'macOS'
+      run: |
+        brew install ninja
+
+    - name: Install CMake
+      uses: lukka/get-cmake@latest
+      with:
+        cmakeVersion: ${{ env.CMAKE_VERSION }}
+        ninjaVersion: latest
+
     - name: Configure CMake
       run: |
-        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DENABLE_GLOBAL_SHORTCUTS=ON -DENABLE_FMS_SUPPORT=ON -DENABLE_GLASS_INTEGRATION=ON -DENABLE_DASHBOARD_MANAGEMENT=ON -DENABLE_PRACTICE_MATCH=ON
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=Release \
+          -G "${{ matrix.cmake_generator }}" \
+          ${{ matrix.cmake_arch }} \
+          -DENABLE_GLOBAL_SHORTCUTS=ON \
+          -DENABLE_FMS_SUPPORT=ON \
+          -DENABLE_GLASS_INTEGRATION=ON \
+          -DENABLE_DASHBOARD_MANAGEMENT=ON \
+          -DENABLE_PRACTICE_MATCH=ON
 
     - name: Build
       run: |
         cmake --build build --config Release --parallel
 
-    - name: Package (Linux)
+    - name: Create AppImage (Linux)
       if: runner.os == 'Linux'
       run: |
-        mkdir -p package
-        cp build/YetAnotherDriverStation package/
-        cp -r dashboards package/
-        tar -czf ${{ matrix.artifact_name }}.tar.gz -C package .
+        wget -O linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+        wget -O linuxdeploy-plugin-qt https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+        chmod +x linuxdeploy linuxdeploy-plugin-qt
+        mkdir -p AppDir/usr/bin
+        cp build/YetAnotherDriverStation AppDir/usr/bin/
+        cp -r dashboards AppDir/usr/share/
+        ./linuxdeploy --appdir AppDir --plugin qt --output appimage
+        mv Yet_Another_Driver_Station-*.AppImage ${{ matrix.artifact_name }}.AppImage
 
-    - name: Package (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        mkdir package
-        copy build\Release\YetAnotherDriverStation.exe package\
-        xcopy dashboards package\dashboards\ /E /I
-        windeployqt package\YetAnotherDriverStation.exe --qmldir qml
-        7z a ${{ matrix.artifact_name }}.zip package\*
-
-    - name: Package (macOS)
+    - name: Create macOS Bundle
       if: runner.os == 'macOS'
       run: |
-        mkdir -p package
-        cp -r build/YetAnotherDriverStation.app package/
-        cp -r dashboards package/YetAnotherDriverStation.app/Contents/Resources/
-        macdeployqt package/YetAnotherDriverStation.app -qmldir=qml
-        tar -czf ${{ matrix.artifact_name }}.tar.gz -C package .
+        macdeployqt build/YetAnotherDriverStation.app -qmldir=qml
+        cp -r dashboards build/YetAnotherDriverStation.app/Contents/Resources/
+        cd build
+        tar -czf ../${{ matrix.artifact_name }}.tar.gz YetAnotherDriverStation.app
 
-    - name: Upload artifacts
+    - name: Package Windows
+      if: runner.os == 'Windows'
+      run: |
+        windeployqt build/Release/YetAnotherDriverStation.exe --qmldir qml
+        Copy-Item -Recurse dashboards build/Release/
+        cd build/Release
+        7z a ../../${{ matrix.artifact_name }}.zip YetAnotherDriverStation.exe *.dll platforms/ qml/ dashboards/
+
+    - name: Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.artifact_name }}
         path: |
-          ${{ matrix.artifact_name }}.tar.gz
           ${{ matrix.artifact_name }}.zip
+          ${{ matrix.artifact_name }}.AppImage
+          ${{ matrix.artifact_name }}.tar.gz
         retention-days: 30
 
   # Comment on PR with download links
@@ -156,7 +200,7 @@ jobs:
             - [macOS Build](https://github.com/${owner}/${repo}/actions/runs/${run_id})
             - [Linux Build](https://github.com/${owner}/${repo}/actions/runs/${run_id})
             
-            **Note:** Artifacts are available for 7 days. Click the links above to access the GitHub Actions page and download the artifacts.
+            **Note:** Artifacts are available for 30 days. Click the links above to access the GitHub Actions page and download the artifacts.
             
             ### Testing Checklist
             Please test the relevant configurations for your changes:
@@ -165,7 +209,7 @@ jobs:
             - [ ] Linux functionality
             - [ ] Robot communication
             - [ ] Emergency stop functionality
-            - [ ] Global shortcuts (Space, Enter, Ctrl+E)
+            - [ ] Global shortcuts (Space for enable/disable, Enter for current mode)
             - [ ] Controller detection
             - [ ] Feature flags work as expected
             `;
@@ -191,7 +235,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          YetAnotherDriverStation-Linux/*.tar.gz
+          YetAnotherDriverStation-Linux/*.AppImage
           YetAnotherDriverStation-Windows/*.zip
           YetAnotherDriverStation-macOS/*.tar.gz
         draft: false
@@ -199,3 +243,48 @@ jobs:
         generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-build:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3.3.0
+      with:
+        version: ${{ env.QT_VERSION }}
+        host: linux
+        target: desktop
+        arch: gcc_64
+        cache: true
+        modules: 'qtnetworkauth qtmultimedia qtcharts'
+   
+    - name: Install CMake
+      uses: lukka/get-cmake@latest
+    
+    - name: Clone QHotkey for test
+      run: |
+        git clone --depth 1 https://github.com/Skycoder42/QHotkey.git thirdparty/QHotkey
+    
+    - name: Test build configuration
+      run: |
+        cmake -B build-test -DCMAKE_BUILD_TYPE=Debug -G Ninja
+        cmake --build build-test --config Debug
+        echo "Build configuration test passed"
+    
+    - name: Test feature flags
+      run: |
+        echo "Testing with all features disabled..."
+        cmake -B build-test-minimal \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DENABLE_GLOBAL_SHORTCUTS=OFF \
+          -DENABLE_FMS_SUPPORT=OFF \
+          -DENABLE_GLASS_INTEGRATION=OFF \
+          -DENABLE_DASHBOARD_MANAGEMENT=OFF \
+          -DENABLE_PRACTICE_MATCH=OFF \
+          -G Ninja
+        cmake --build build-test-minimal --config Debug
+        echo "Feature flags test passed"

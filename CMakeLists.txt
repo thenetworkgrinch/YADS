@@ -1,25 +1,22 @@
 cmake_minimum_required(VERSION 3.21)
 
-# Set Qt policy to suppress QML resource prefix warning
-if(POLICY CMP0071)
-    cmake_policy(SET CMP0071 NEW)
-endif()
-
 project(YetAnotherDriverStation VERSION 2025.1.0 LANGUAGES CXX)
 
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Set CMake policies
+if(POLICY CMP0071)
+    cmake_policy(SET CMP0071 NEW)
+endif()
+
 # Enable Qt MOC, UIC, and RCC
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 
-# Set Qt policy for QML modules
-qt_policy(SET QTP0001 NEW)
-
-# Find Qt6 components
+# Find Qt6 components first
 find_package(Qt6 6.5.0 REQUIRED COMPONENTS
     Core
     Quick
@@ -29,6 +26,9 @@ find_package(Qt6 6.5.0 REQUIRED COMPONENTS
     Charts
     Widgets
 )
+
+# Set Qt policy for QML modules AFTER finding Qt
+qt_policy(SET QTP0001 NEW)
 
 # Feature options
 option(ENABLE_GLOBAL_SHORTCUTS "Enable global shortcut support" ON)
@@ -70,8 +70,8 @@ set(SOURCES
     backend/managers/practice_match_manager.cpp
     backend/managers/network_manager.cpp
     backend/managers/application_manager.cpp
-    backend/robot/comms/communicationhandler.cpp
-    backend/robot/comms/packets.cpp
+    backend/comms/communicationhandler.cpp
+    backend/comms/packets.cpp
 )
 
 # Define header files
@@ -89,6 +89,8 @@ set(HEADERS
     backend/managers/practice_match_manager.h
     backend/managers/network_manager.h
     backend/managers/application_manager.h
+    backend/comms/communicationhandler.h
+    backend/comms/packets.h
 )
 
 # Create the executable first
@@ -173,14 +175,24 @@ target_include_directories(YetAnotherDriverStation PRIVATE
 # Platform-specific configurations
 if(WIN32)
     target_compile_definitions(YetAnotherDriverStation PRIVATE WIN32_LEAN_AND_MEAN)
+    target_link_libraries(YetAnotherDriverStation PRIVATE ws2_32 wsock32 hid setupapi)
     set_target_properties(YetAnotherDriverStation PROPERTIES
         WIN32_EXECUTABLE TRUE
     )
 elseif(APPLE)
+    target_link_libraries(YetAnotherDriverStation PRIVATE
+        "-framework IOKit"
+        "-framework CoreFoundation"
+    )
     set_target_properties(YetAnotherDriverStation PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/Info.plist.in
     )
+elseif(UNIX)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(UDEV REQUIRED libudev)
+    target_link_libraries(YetAnotherDriverStation PRIVATE ${UDEV_LIBRARIES})
+    target_include_directories(YetAnotherDriverStation PRIVATE ${UDEV_INCLUDE_DIRS})
 endif()
 
 # Install configuration
