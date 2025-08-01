@@ -1,0 +1,344 @@
+name: Build and Release Yet Another Driver Station
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a new release'
+        required: false
+        default: false
+        type: boolean
+      release_tag:
+        description: 'Release tag (e.g., v1.0.0)'
+        required: false
+        type: string
+
+env:
+  QT_VERSION: '6.5.0'
+  CMAKE_BUILD_TYPE: Release
+
+jobs:
+  # Skip builds for draft PRs
+  check-draft:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    outputs:
+      is_draft: ${{ steps.check.outputs.is_draft }}
+    steps:
+      - name: Check if PR is draft
+        id: check
+        run: |
+          if [ "${{ github.event.pull_request.draft }}" = "true" ]; then
+            echo "is_draft=true" >> $GITHUB_OUTPUT
+            echo "Skipping build for draft PR"
+          else
+            echo "is_draft=false" >> $GITHUB_OUTPUT
+          fi
+
+  build-windows:
+    needs: [check-draft]
+    if: always() && (github.event_name != 'pull_request' || needs.check-draft.outputs.is_draft == 'false')
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: ${{ env.QT_VERSION }}
+        host: windows
+        target: desktop
+        arch: win64_msvc2019_64
+        modules: 'qtnetworkauth qtmultimedia'
+    
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.3
+    
+    - name: Install qpmx
+      run: |
+        git clone https://github.com/Skycoder42/qpmx.git
+        cd qpmx
+        qmake
+        nmake
+        nmake install
+        cd ..
+    
+    - name: Install dependencies
+      run: |
+        mkdir vendor
+        cd vendor
+        qpmx init
+        qpmx install de.skycoder42.qhotkey
+        cd ..
+    
+    - name: Build application
+      run: |
+        qmake YetAnotherDriverStation.pro CONFIG+=release
+        nmake
+    
+    - name: Package Windows
+      run: |
+        mkdir release-windows
+        copy build\release\YetAnotherDriverStation.exe release-windows\
+        windeployqt release-windows\YetAnotherDriverStation.exe --qmldir qml
+        copy README.md release-windows\
+        copy LICENSE release-windows\ 2>nul || echo "No LICENSE file found"
+    
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: yet-another-driver-station-windows
+        path: release-windows/
+
+  build-macos:
+    needs: [check-draft]
+    if: always() && (github.event_name != 'pull_request' || needs.check-draft.outputs.is_draft == 'false')
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: ${{ env.QT_VERSION }}
+        host: mac
+        target: desktop
+        arch: clang_64
+        modules: 'qtnetworkauth qtmultimedia'
+    
+    - name: Install qpmx
+      run: |
+        git clone https://github.com/Skycoder42/qpmx.git
+        cd qpmx
+        qmake
+        make
+        sudo make install
+        cd ..
+    
+    - name: Install dependencies
+      run: |
+        mkdir vendor
+        cd vendor
+        qpmx init
+        qpmx install de.skycoder42.qhotkey
+        cd ..
+    
+    - name: Build application
+      run: |
+        qmake YetAnotherDriverStation.pro CONFIG+=release
+        make -j$(sysctl -n hw.ncpu)
+    
+    - name: Package macOS
+      run: |
+        mkdir release-macos
+        cp -r build/release/YetAnotherDriverStation.app release-macos/
+        macdeployqt release-macos/YetAnotherDriverStation.app -qmldir=qml
+        cp README.md release-macos/
+        [ -f LICENSE ] && cp LICENSE release-macos/ || echo "No LICENSE file found"
+    
+    - name: Upload macOS artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: yet-another-driver-station-macos
+        path: release-macos/
+
+  build-linux:
+    needs: [check-draft]
+    if: always() && (github.event_name != 'pull_request' || needs.check-draft.outputs.is_draft == 'false')
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libudev-dev libgl1-mesa-dev libxkbcommon-dev
+    
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: ${{ env.QT_VERSION }}
+        host: linux
+        target: desktop
+        arch: gcc_64
+        modules: 'qtnetworkauth qtmultimedia'
+    
+    - name: Install qpmx
+      run: |
+        git clone https://github.com/Skycoder42/qpmx.git
+        cd qpmx
+        qmake
+        make
+        sudo make install
+        cd ..
+    
+    - name: Install dependencies
+      run: |
+        mkdir vendor
+        cd vendor
+        qpmx init
+        qpmx install de.skycoder42.qhotkey
+        cd ..
+    
+    - name: Build application
+      run: |
+        qmake YetAnotherDriverStation.pro CONFIG+=release
+        make -j$(nproc)
+    
+    - name: Package Linux
+      run: |
+        mkdir release-linux
+        cp build/release/YetAnotherDriverStation release-linux/
+        cp README.md release-linux/
+        [ -f LICENSE ] && cp LICENSE release-linux/ || echo "No LICENSE file found"
+        
+        # Create AppImage (optional)
+        wget -c -nv "https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage"
+        chmod a+x linuxdeployqt-continuous-x86_64.AppImage
+        
+        # Create desktop file
+        cat > release-linux/YetAnotherDriverStation.desktop << EOF
+        [Desktop Entry]
+        Type=Application
+        Name=Yet Another Driver Station
+        Exec=YetAnotherDriverStation
+        Icon=YetAnotherDriverStation
+        Categories=Development;
+        EOF
+        
+        # Deploy Qt libraries
+        ./linuxdeployqt-continuous-x86_64.AppImage release-linux/YetAnotherDriverStation -qmldir=qml -appimage || true
+    
+    - name: Upload Linux artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: yet-another-driver-station-linux
+        path: release-linux/
+
+  # Comment on PR with download links
+  pr-comment:
+    needs: [build-windows, build-macos, build-linux]
+    if: github.event_name == 'pull_request' && !failure() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const pr_number = context.payload.pull_request.number;
+            const run_id = context.runId;
+            
+            const comment = `## 🚀 Build Artifacts Ready!
+            
+            Your PR has been built successfully across all platforms. Download the artifacts to test your changes:
+            
+            ### Windows Build
+            - [Windows Build](https://github.com/${owner}/${repo}/actions/runs/${run_id})
+            
+            ### macOS Build
+            - [macOS Build](https://github.com/${owner}/${repo}/actions/runs/${run_id})
+            
+            ### Linux Build
+            - [Linux Build](https://github.com/${owner}/${repo}/actions/runs/${run_id})
+            
+            **Note:** Artifacts are available for 7 days. Click the links above to access the GitHub Actions page and download the artifacts.
+            
+            ### Testing Checklist
+            Please test the relevant configurations for your changes:
+            - [ ] Windows functionality
+            - [ ] macOS functionality
+            - [ ] Linux functionality
+            - [ ] Robot communication
+            - [ ] Emergency stop functionality
+            - [ ] Global shortcuts (Space, Enter, Ctrl+E)
+            - [ ] Controller detection
+            - [ ] Feature flags work as expected
+            `;
+            
+            github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: pr_number,
+              body: comment
+            });
+
+  # Create release if this is a tag push or manual trigger
+  create-release:
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+    
+    - name: Create release archives
+      run: |
+        cd yet-another-driver-station-windows
+        zip -r ../yet-another-driver-station-windows.zip .
+        cd ../yet-another-driver-station-macos
+        tar -czf ../yet-another-driver-station-macos.tar.gz .
+        cd ../yet-another-driver-station-linux
+        tar -czf ../yet-another-driver-station-linux.tar.gz .
+        cd ..
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          yet-another-driver-station-windows.zip
+          yet-another-driver-station-macos.tar.gz
+          yet-another-driver-station-linux.tar.gz
+        draft: false
+        prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') }}
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-build:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: ${{ env.QT_VERSION }}
+        host: linux
+        target: desktop
+        arch: gcc_64
+    
+    - name: Test build configuration
+      run: |
+        qmake YetAnotherDriverStation.pro CONFIG+=debug
+        make clean
+        echo "Build configuration test passed"
+    
+    - name: Test feature flags
+      run: |
+        echo "Testing with all features disabled..."
+        qmake YetAnotherDriverStation.pro CONFIG+=debug CONFIG+=no_fms_support CONFIG+=no_glass_integration CONFIG+=no_dashboard_management CONFIG+=no_practice_match CONFIG+=no_global_shortcuts
+        make clean
+        echo "Feature flags test passed"
