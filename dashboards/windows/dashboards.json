@@ -1,0 +1,36 @@
+{
+  "dashboards": [
+    {
+      "name": "Driver Station",
+      "description": "Built-in driver station interface",
+      "executable": "",
+      "arguments": [],
+      "builtin": true
+    },
+    {
+      "name": "Glass",
+      "description": "WPILib Glass Dashboard",
+      "executable": "Glass.exe",
+      "arguments": [],
+      "searchPaths": [
+        "%USERPROFILE%/wpilib/2024/tools/Glass.exe",
+        "%USERPROFILE%/frc2024/tools/Glass.exe",
+        "C:/Users/Public/wpilib/2024/tools/Glass.exe"
+      ]
+    },
+    {
+      "name": "SmartDashboard",
+      "description": "WPILib SmartDashboard",
+      "executable": "SmartDashboard.exe",
+      "arguments": [],
+      "searchPaths": ["%USERPROFILE%/wpilib/2024/tools/SmartDashboard.exe"]
+    },
+    {
+      "name": "Shuffleboard",
+      "description": "WPILib Shuffleboard",
+      "executable": "Shuffleboard.exe",
+      "arguments": [],
+      "searchPaths": ["%USERPROFILE%/wpilib/2024/tools/Shuffleboard.exe"]
+    }
+  ]
+}

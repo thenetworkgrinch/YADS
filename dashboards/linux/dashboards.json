@@ -1,0 +1,32 @@
+{
+  "dashboards": [
+    {
+      "name": "Driver Station",
+      "description": "Built-in driver station interface",
+      "executable": "",
+      "arguments": [],
+      "builtin": true
+    },
+    {
+      "name": "Glass",
+      "description": "WPILib Glass Dashboard",
+      "executable": "Glass",
+      "arguments": [],
+      "searchPaths": ["~/wpilib/2024/tools/Glass", "~/frc2024/tools/Glass", "/usr/local/frc/tools/Glass"]
+    },
+    {
+      "name": "SmartDashboard",
+      "description": "WPILib SmartDashboard",
+      "executable": "SmartDashboard",
+      "arguments": [],
+      "searchPaths": ["~/wpilib/2024/tools/SmartDashboard"]
+    },
+    {
+      "name": "Shuffleboard",
+      "description": "WPILib Shuffleboard",
+      "executable": "Shuffleboard",
+      "arguments": [],
+      "searchPaths": ["~/wpilib/2024/tools/Shuffleboard"]
+    }
+  ]
+}

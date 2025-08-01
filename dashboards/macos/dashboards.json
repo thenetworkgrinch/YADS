@@ -1,0 +1,36 @@
+{
+  "dashboards": [
+    {
+      "name": "Driver Station",
+      "description": "Built-in driver station interface",
+      "executable": "",
+      "arguments": [],
+      "builtin": true
+    },
+    {
+      "name": "Glass",
+      "description": "WPILib Glass Dashboard",
+      "executable": "Glass",
+      "arguments": [],
+      "searchPaths": [
+        "~/wpilib/2024/tools/Glass.app/Contents/MacOS/Glass",
+        "~/frc2024/tools/Glass.app/Contents/MacOS/Glass",
+        "/Applications/WPILib/tools/Glass.app/Contents/MacOS/Glass"
+      ]
+    },
+    {
+      "name": "SmartDashboard",
+      "description": "WPILib SmartDashboard",
+      "executable": "SmartDashboard",
+      "arguments": [],
+      "searchPaths": ["~/wpilib/2024/tools/SmartDashboard.app/Contents/MacOS/SmartDashboard"]
+    },
+    {
+      "name": "Shuffleboard",
+      "description": "WPILib Shuffleboard",
+      "executable": "Shuffleboard",
+      "arguments": [],
+      "searchPaths": ["~/wpilib/2024/tools/Shuffleboard.app/Contents/MacOS/Shuffleboard"]
+    }
+  ]
+}

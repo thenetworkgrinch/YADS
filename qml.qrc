@@ -1,0 +1,20 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+        <file>qml/OperationsView.qml</file>
+        <file>qml/DiagnosticsView.qml</file>
+        <file>qml/ControllersView.qml</file>
+        <file>qml/ChartsView.qml</file>
+        <file>qml/JoysticksView.qml</file>
+        <file>qml/DashboardView.qml</file>
+        <file>qml/NetworkDiagnosticsView.qml</file>
+        <file>qml/LoggingView.qml</file>
+        <file>qml/SystemStatusIndicator.qml</file>
+        <file>qml/StatusIndicator.qml</file>
+        <file>qml/NetworkTablesIndicator.qml</file>
+        <file>qml/LogDownloadDialog.qml</file>
+        <file>qml/SystemDetailsDialog.qml</file>
+        <file>qml/BatteryAlertDialog.qml</file>
+        <file>qml/BatterySettingsDialog.qml</file>
+    </qresource>
+</RCC>
