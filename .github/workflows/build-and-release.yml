@@ -126,7 +126,6 @@ jobs:
     - name: Configure CMake
       run: |
         cmake -B build -S . \
-          -DCMAKE_BUILD_TYPE=Release \
           -G "${{ matrix.cmake_generator }}" \
           ${{ matrix.cmake_arch }} \
           -DENABLE_GLOBAL_SHORTCUTS=ON \
