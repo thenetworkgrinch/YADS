@@ -1,126 +1,62 @@
-#ifndef ROBOT_COMMS_FMS_FMSHANDLER_H
-#define ROBOT_COMMS_FMS_FMSHANDLER_H
+#ifndef ROBOT_FMS_HANDLER_H
+#define ROBOT_FMS_HANDLER_H
 
 #include <QObject>
 #include <QUdpSocket>
 #include <QTimer>
 #include <QHostAddress>
-#include <QDateTime>
-#include <QMutex>
-#include "../../../core/logger.h"
 
 /**
- * @brief Handles FMS (Field Management System) communication for robot comms
+ * @brief Handles FMS communication specifically for robot control
  * 
- * This class manages communication with the FMS during official matches,
- * receiving match state information and robot control commands.
- * This is the robot communication specific version.
+ * This is a specialized FMS handler that focuses on robot control
+ * aspects of FMS communication, separate from the main FMS handler.
  */
-class FMSHandler : public QObject
+class RobotFMSHandler : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(bool fmsConnected READ isFMSConnected NOTIFY fmsConnectedChanged)
+    Q_PROPERTY(bool robotEnabled READ isRobotEnabled NOTIFY robotEnabledChanged)
+    Q_PROPERTY(QString robotMode READ robotMode NOTIFY robotModeChanged)
 
 public:
-    enum MatchType {
-        None = 0,
-        Practice = 1,
-        Qualification = 2,
-        Elimination = 3
-    };
-    Q_ENUM(MatchType)
+    explicit RobotFMSHandler(QObject *parent = nullptr);
+    ~RobotFMSHandler();
 
-    enum MatchPhase {
-        PreMatch = 0,
-        Autonomous = 1,
-        Teleop = 2,
-        PostMatch = 3
-    };
-    Q_ENUM(MatchPhase)
-
-    struct MatchInfo {
-        MatchType type = None;
-        int matchNumber = 0;
-        int replayNumber = 0;
-        QString eventName;
-        QDateTime startTime;
-    };
-
-    struct MatchState {
-        MatchPhase phase = PreMatch;
-        bool enabled = false;
-        bool emergencyStop = false;
-        int timeRemaining = 0;
-        QDateTime timestamp;
-    };
-
-    explicit FMSHandler(QObject *parent = nullptr);
-    ~FMSHandler();
-
-    // Getters
-    bool isConnected() const { return m_connected; }
-    MatchInfo currentMatch() const { return m_currentMatch; }
-    MatchState currentState() const { return m_currentState; }
-    QHostAddress fmsAddress() const { return m_fmsAddress; }
-    int fmsPort() const { return m_fmsPort; }
-
-    // Control methods
-    void startListening();
-    void stopListening();
-    void setListenPort(int port);
+    bool isFMSConnected() const { return m_fmsConnected; }
+    bool isRobotEnabled() const { return m_robotEnabled; }
+    QString robotMode() const { return m_robotMode; }
 
 public slots:
-    void connectToFMS(const QHostAddress& address, int port = 1750);
-    void disconnectFromFMS();
-    void sendRobotStatus(bool enabled, bool emergencyStop, double batteryVoltage);
+    void enableRobot();
+    void disableRobot();
+    void setRobotMode(const QString &mode);
+    void emergencyStop();
 
 signals:
-    void fmsConnected();
-    void fmsDisconnected();
-    void fmsModeChanged(int mode);
-    void matchInfoReceived(const MatchInfo& info);
-    void matchStateChanged(const MatchState& state);
-    void fmsError(const QString& error);
+    void fmsConnectedChanged(bool connected);
+    void robotEnabledChanged(bool enabled);
+    void robotModeChanged(const QString &mode);
+    void fmsCommandReceived(const QString &command);
 
 private slots:
-    void onSocketReadyRead();
-    void onSocketError(QAbstractSocket::SocketError error);
-    void onHeartbeatTimeout();
-    void sendHeartbeat();
+    void processFMSCommand();
+    void sendRobotStatus();
 
 private:
-    // Network components
-    QUdpSocket* m_socket;
+    void parseCommand(const QByteArray &data);
+    void updateRobotState(bool enabled, const QString &mode);
+
+    QUdpSocket *m_commandSocket;
+    QTimer *m_statusTimer;
+    
+    bool m_fmsConnected;
+    bool m_robotEnabled;
+    QString m_robotMode;
+    
     QHostAddress m_fmsAddress;
-    int m_fmsPort;
-    int m_listenPort;
-    
-    // Connection state
-    bool m_connected;
-    QDateTime m_lastHeartbeat;
-    QTimer* m_heartbeatTimer;
-    QTimer* m_timeoutTimer;
-    
-    // Match information
-    MatchInfo m_currentMatch;
-    MatchState m_currentState;
-    
-    // Thread safety
-    mutable QMutex m_mutex;
-    
-    // Packet processing
-    void processIncomingPacket(const QByteArray& data, const QHostAddress& sender);
-    void processMatchInfo(const QByteArray& data);
-    void processMatchState(const QByteArray& data);
-    void processControlCommand(const QByteArray& data);
-    
-    // Packet creation
-    QByteArray createHeartbeatPacket();
-    QByteArray createStatusPacket(bool enabled, bool emergencyStop, double batteryVoltage);
-    
-    // Helper methods
-    void updateConnectionState(bool connected);
-    void resetMatchInfo();
-    void logFMSEvent(const QString& event);
+    quint16 m_commandPort;
+    quint16 m_statusPort;
 };
 
-#endif // ROBOT_COMMS_FMS_FMSHANDLER_H
+#endif // ROBOT_FMS_HANDLER_H

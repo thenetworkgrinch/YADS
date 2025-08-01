@@ -3,6 +3,10 @@
 #include <QMutexLocker>
 #include <QDebug>
 #include <cstring>
+#include <QCryptographicHash>
+#include <QNetworkInterface>
+#include <QRegularExpression>
+#include <QtEndian>
 
 using namespace FRCDriverStation::Protocol;
 
@@ -36,9 +40,7 @@ const quint16 RobotPackets::CRC_TABLE[256] = {
     0x5844, 0x4865, 0x7806, 0x6827, 0x18C0, 0x08E1, 0x3882, 0x28A3,
     0xCB7D, 0xDB5C, 0xEB3F, 0xFB1E, 0x8BF9, 0x9BD8, 0xABBB, 0xBB9A,
     0x4A75, 0x5A54, 0x6A37, 0x7A16, 0x0AF1, 0x1AD0, 0x2AB3, 0x3A92,
-    0xFD2E, 0xED0F, 0xDD6C, 0xCD4D, 0xBDAA, 0xAD8B, 0x9DE8, 0x8DC9,
-    0x7C26, 0x6C07, 0x5C64, 0x4C45, 0x3CA2, 0x2C83, 0x1CE0, 0x0CC1,
-    0xEF1F, 0xFF3E, 0xCF5D, 0xDF7C, 0xAF9B, 0xBFBA, 0x8FD9, 0x9FF8,
+    0xFD2E, 0xED0F, 0xDD6C, 0xCD4D, 0xBDAA, 0xAD8B, 0x8FD9, 0x9FF8,
     0x6E17, 0x7E36, 0x4E55, 0x5E74, 0x2E93, 0x3EB2, 0x0ED1, 0x1EF0
 };
 
@@ -549,6 +551,7 @@ void RobotPackets::updateGeneralData(quint8& generalData)
     
     if (m_emergencyStop) {
         generalData |= EmergencyStop;
+        generalData &= ~Enabled; // Also disable
     }
     
     if (m_fmsAttached) {
@@ -604,3 +607,448 @@ void RobotPackets::initializeCRCTable()
     // This function exists for consistency but doesn't need to do anything
     Logger::instance().log(Logger::Debug, "RobotPackets", "CRC table initialized");
 }
+
+namespace RobotPackets {
+
+// ControlPacket implementation
+ControlPacket::ControlPacket()
+    : packetIndex(0)
+    , generalData(0)
+    , mode(0)
+    , request(0)
+    , crc(0)
+{
+    // Initialize joystick data
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            joysticks[i].axes[j] = 127; // Neutral position
+        }
+        joysticks[i].buttons = 0;
+        for (int j = 0; j < 4; ++j) {
+            joysticks[i].povs[j] = 255; // No POV pressed
+        }
+    }
+}
+
+void ControlPacket::setEnabled(bool enabled)
+{
+    if (enabled) {
+        generalData |= ControlFlags::ENABLED;
+    } else {
+        generalData &= ~ControlFlags::ENABLED;
+    }
+}
+
+void ControlPacket::setMode(quint8 newMode)
+{
+    mode = newMode;
+    
+    // Clear mode flags
+    generalData &= ~(ControlFlags::AUTONOMOUS | ControlFlags::TEST);
+    
+    // Set appropriate mode flag
+    if (newMode == 1) { // Autonomous
+        generalData |= ControlFlags::AUTONOMOUS;
+    } else if (newMode == 2) { // Test
+        generalData |= ControlFlags::TEST;
+    }
+    // Teleop is default (no flag)
+}
+
+void ControlPacket::setEmergencyStop(bool estop)
+{
+    if (estop) {
+        generalData |= ControlFlags::EMERGENCY_STOP;
+        generalData &= ~ControlFlags::ENABLED; // Also disable
+    } else {
+        generalData &= ~ControlFlags::EMERGENCY_STOP;
+    }
+}
+
+void ControlPacket::setFMSAttached(bool attached)
+{
+    if (attached) {
+        generalData |= ControlFlags::FMS_ATTACHED;
+    } else {
+        generalData &= ~ControlFlags::FMS_ATTACHED;
+    }
+}
+
+void ControlPacket::calculateCRC()
+{
+    QByteArray data = toByteArray();
+    // Remove the last 4 bytes (CRC field) before calculating
+    data.chop(4);
+    crc = PacketBuilder::calculateCRC32(data);
+}
+
+QByteArray ControlPacket::toByteArray() const
+{
+    QByteArray data;
+    QDataStream stream(&data, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    stream << packetIndex;
+    stream << generalData;
+    stream << mode;
+    stream << request;
+    
+    // Write joystick data
+    for (int i = 0; i < 6; ++i) {
+        for (int j = 0; j < 6; ++j) {
+            stream << joysticks[i].axes[j];
+        }
+        stream << joysticks[i].buttons;
+        for (int j = 0; j < 4; ++j) {
+            stream << joysticks[i].povs[j];
+        }
+    }
+    
+    stream << crc;
+    
+    return data;
+}
+
+// StatusPacket implementation
+StatusPacket::StatusPacket()
+    : generalData(0)
+    , mode(0)
+    , batteryVoltage(0)
+    , request(0)
+    , pcmId(0)
+    , pdpId(0)
+    , pcmVersion(0)
+    , pdpVersion(0)
+    , robotCodeVersion(0)
+{
+}
+
+bool StatusPacket::isEnabled() const
+{
+    return generalData & StatusFlags::ROBOT_ENABLED;
+}
+
+bool StatusPacket::isAutonomous() const
+{
+    return generalData & StatusFlags::ROBOT_AUTO;
+}
+
+bool StatusPacket::isTest() const
+{
+    return generalData & StatusFlags::ROBOT_TEST;
+}
+
+bool StatusPacket::isEmergencyStop() const
+{
+    return generalData & StatusFlags::ROBOT_ESTOP;
+}
+
+bool StatusPacket::isBrownout() const
+{
+    return generalData & StatusFlags::BROWNOUT;
+}
+
+bool StatusPacket::isCodeReady() const
+{
+    return generalData & StatusFlags::CODE_READY;
+}
+
+double StatusPacket::getBatteryVoltage() const
+{
+    return batteryVoltage / 1000.0; // Convert millivolts to volts
+}
+
+void StatusPacket::fromByteArray(const QByteArray &data)
+{
+    if (data.size() < static_cast<int>(sizeof(StatusPacket))) {
+        return;
+    }
+    
+    QDataStream stream(data);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    stream >> generalData;
+    stream >> mode;
+    stream >> batteryVoltage;
+    stream >> request;
+    stream >> pcmId;
+    stream >> pdpId;
+    stream >> pcmVersion;
+    stream >> pdpVersion;
+    stream >> robotCodeVersion;
+}
+
+// JoystickPacket implementation
+JoystickPacket::JoystickPacket()
+    : joystickId(0)
+    , axisCount(0)
+    , buttonCount(0)
+    , buttons(0)
+    , povCount(0)
+{
+    for (int i = 0; i < 12; ++i) {
+        axes[i] = 127; // Neutral
+    }
+    for (int i = 0; i < 4; ++i) {
+        povs[i] = 65535; // No POV
+    }
+}
+
+void JoystickPacket::setAxis(int index, double value)
+{
+    if (index >= 0 && index < 12) {
+        // Convert from -1.0 to 1.0 range to 0-255
+        axes[index] = static_cast<quint8>((value + 1.0) * 127.5);
+        axisCount = qMax(axisCount, static_cast<quint8>(index + 1));
+    }
+}
+
+void JoystickPacket::setButton(int index, bool pressed)
+{
+    if (index >= 0 && index < 16) {
+        if (pressed) {
+            buttons |= (1 << index);
+        } else {
+            buttons &= ~(1 << index);
+        }
+        buttonCount = qMax(buttonCount, static_cast<quint8>(index + 1));
+    }
+}
+
+void JoystickPacket::setPOV(int index, int angle)
+{
+    if (index >= 0 && index < 4) {
+        if (angle >= 0 && angle < 360) {
+            povs[index] = static_cast<quint16>(angle);
+        } else {
+            povs[index] = 65535; // No POV
+        }
+        povCount = qMax(povCount, static_cast<quint8>(index + 1));
+    }
+}
+
+QByteArray JoystickPacket::toByteArray() const
+{
+    QByteArray data;
+    QDataStream stream(&data, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    stream << joystickId;
+    stream << axisCount;
+    for (int i = 0; i < axisCount; ++i) {
+        stream << axes[i];
+    }
+    stream << buttonCount;
+    stream << buttons;
+    stream << povCount;
+    for (int i = 0; i < povCount; ++i) {
+        stream << povs[i];
+    }
+    
+    return data;
+}
+
+// PacketBuilder implementation
+QByteArray PacketBuilder::buildControlPacket(const ControlPacket &packet)
+{
+    return packet.toByteArray();
+}
+
+QByteArray PacketBuilder::buildJoystickPacket(const JoystickPacket &packet)
+{
+    return packet.toByteArray();
+}
+
+QByteArray PacketBuilder::buildTimezonePacket(const QTimeZone &timezone)
+{
+    QByteArray data;
+    QDataStream stream(&data, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    stream << static_cast<quint8>(PacketType::TIMEZONE_DATA);
+    
+    QByteArray tzData = timezone.id();
+    stream << static_cast<quint16>(tzData.size());
+    stream.writeRawData(tzData.data(), tzData.size());
+    
+    return data;
+}
+
+QByteArray PacketBuilder::buildRebootPacket()
+{
+    QByteArray data;
+    QDataStream stream(&data, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    stream << static_cast<quint8>(PacketType::REBOOT);
+    stream << static_cast<quint32>(0x12345678); // Magic number
+    
+    return data;
+}
+
+QByteArray PacketBuilder::buildVersionRequestPacket()
+{
+    QByteArray data;
+    QDataStream stream(&data, QIODevice::WriteOnly);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    stream << static_cast<quint8>(PacketType::VERSION);
+    
+    return data;
+}
+
+bool PacketBuilder::parseStatusPacket(const QByteArray &data, StatusPacket &packet)
+{
+    if (data.size() < static_cast<int>(sizeof(StatusPacket))) {
+        return false;
+    }
+    
+    packet.fromByteArray(data);
+    return true;
+}
+
+bool PacketBuilder::parseErrorPacket(const QByteArray &data, QString &error)
+{
+    if (data.size() < 3) {
+        return false;
+    }
+    
+    QDataStream stream(data);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    quint8 type;
+    stream >> type;
+    
+    if (type != PacketType::ERROR_DATA) {
+        return false;
+    }
+    
+    quint16 length;
+    stream >> length;
+    
+    if (data.size() < 3 + length) {
+        return false;
+    }
+    
+    QByteArray errorData(length, 0);
+    stream.readRawData(errorData.data(), length);
+    error = QString::fromUtf8(errorData);
+    
+    return true;
+}
+
+bool PacketBuilder::parsePrintPacket(const QByteArray &data, QString &message)
+{
+    if (data.size() < 3) {
+        return false;
+    }
+    
+    QDataStream stream(data);
+    stream.setByteOrder(QDataStream::BigEndian);
+    
+    quint8 type;
+    stream >> type;
+    
+    if (type != PacketType::PRINT_DATA) {
+        return false;
+    }
+    
+    quint16 length;
+    stream >> length;
+    
+    if (data.size() < 3 + length) {
+        return false;
+    }
+    
+    QByteArray messageData(length, 0);
+    stream.readRawData(messageData.data(), length);
+    message = QString::fromUtf8(messageData);
+    
+    return true;
+}
+
+quint32 PacketBuilder::calculateCRC32(const QByteArray &data)
+{
+    // Simple CRC32 implementation
+    static const quint32 crcTable[256] = {
+        0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA, 0x076DC419, 0x706AF48F,
+        0xE963A535, 0x9E6495A3, 0x0EDB8832, 0x79DCB8A4, 0xE0D5E91E, 0x97D2D988,
+        // ... (full CRC table would be here)
+    };
+    
+    quint32 crc = 0xFFFFFFFF;
+    for (int i = 0; i < data.size(); ++i) {
+        quint8 byte = static_cast<quint8>(data[i]);
+        crc = crcTable[(crc ^ byte) & 0xFF] ^ (crc >> 8);
+    }
+    return crc ^ 0xFFFFFFFF;
+}
+
+bool PacketBuilder::verifyCRC32(const QByteArray &data, quint32 expectedCRC)
+{
+    return calculateCRC32(data) == expectedCRC;
+}
+
+// NetworkUtils implementation
+QHostAddress NetworkUtils::getRobotAddress(int teamNumber)
+{
+    if (!isValidTeamNumber(teamNumber)) {
+        return QHostAddress();
+    }
+    
+    // Primary robot address: 10.TE.AM.2
+    int team = teamNumber;
+    int te = team / 100;
+    int am = team % 100;
+    
+    return QHostAddress(QString("10.%1.%2.2").arg(te).arg(am));
+}
+
+QList<QHostAddress> NetworkUtils::getAllRobotAddresses(int teamNumber)
+{
+    QList<QHostAddress> addresses;
+    
+    if (!isValidTeamNumber(teamNumber)) {
+        return addresses;
+    }
+    
+    int team = teamNumber;
+    int te = team / 100;
+    int am = team % 100;
+    
+    // Primary competition address
+    addresses << QHostAddress(QString("10.%1.%2.2").arg(te).arg(am));
+    
+    // USB connection
+    addresses << QHostAddress("172.22.11.2");
+    
+    // Ethernet connection
+    addresses << QHostAddress("192.168.1.2");
+    
+    // mDNS address (not an IP, but included for completeness)
+    // addresses << QHostAddress(QString("roboRIO-%1-FRC.local").arg(team));
+    
+    return addresses;
+}
+
+quint16 NetworkUtils::getRobotPort()
+{
+    return 1110;
+}
+
+quint16 NetworkUtils::getDriverStationPort()
+{
+    return 1150;
+}
+
+bool NetworkUtils::isValidTeamNumber(int teamNumber)
+{
+    return teamNumber >= 1 && teamNumber <= 9999;
+}
+
+QString NetworkUtils::formatTeamNumber(int teamNumber)
+{
+    return QString::number(teamNumber);
+}
+
+} // namespace RobotPackets

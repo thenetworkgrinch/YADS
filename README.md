@@ -1,313 +1,251 @@
 # Yet Another Driver Station
 
-A modern, feature-rich FRC Driver Station application built with Qt/QML, designed to provide teams with a reliable and intuitive interface for controlling their robots during competitions and practice sessions.
-
-![Build Status](https://github.com/thenetworkgrinch/yet-another-driver-station/workflows/Build%20and%20Release%20Yet%20Another%20Driver%20Station/badge.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
+A modern, cross-platform FRC Driver Station application built with Qt/QML, designed to provide teams with a reliable and feature-rich interface for controlling their robots during competitions and practice sessions.
 
 ## Features
 
 ### Core Functionality
-- **Dual Connection Modes**: Connect via traditional team numbers or direct IP addresses
-- **Robot Communication**: Full FRC protocol support with automatic robot discovery
-- **Real-time Status**: Live robot status, battery voltage, and connection monitoring
-- **Emergency Controls**: Global emergency stop and robot disable/enable functionality
-- **Match Logging**: Comprehensive logging system with match-based organization
+- **Robot Communication**: Full FRC protocol support with real-time status monitoring
+- **Emergency Stop**: Instant robot disable with global hotkeys (Space, Enter, Ctrl+E)
+- **Dual Connection Modes**: Support for both competition (FMS) and practice modes
+- **Controller Support**: Automatic detection and configuration of USB game controllers
+- **Team Management**: Easy team number configuration with validation
 
 ### Advanced Features
 - **Global Shortcuts**: System-wide hotkeys that work even when the application isn't focused
-- **Dashboard Management**: Support for multiple dashboards (Glass, Shuffleboard, SmartDashboard)
-- **Practice Match Support**: Built-in practice match timer and management
-- **Network Diagnostics**: Advanced network monitoring and troubleshooting tools
-- **Crash Recovery**: Automatic crash detection and recovery system
+- **Battery Monitoring**: Real-time battery voltage tracking with configurable alerts
+- **Practice Match Timer**: Built-in match simulation with autonomous/teleop periods
+- **Network Diagnostics**: Comprehensive network status and troubleshooting tools
+- **Dashboard Integration**: Support for multiple robot dashboards with auto-launch
+- **Logging System**: Comprehensive event logging with export capabilities
 
 ### User Interface
-- **Modern Design**: Clean, intuitive interface built with Qt/QML
-- **Dual Connection Modes**: Toggle between team number and IP address input
-- **Dark/Light Theme**: Professional themes optimized for competition environments
-- **Real-time Updates**: Live status indicators and smooth animations
-- **Accessibility**: Full keyboard navigation and screen reader support
+- **Modern QML Interface**: Clean, responsive design optimized for competition use
+- **Multi-tab Layout**: Organized views for Operations, Diagnostics, Controllers, and more
+- **Real-time Charts**: Visual representation of robot telemetry and network status
+- **Status Indicators**: Clear visual feedback for all system states
+- **Customizable Layouts**: Adaptable interface for different screen sizes and preferences
 
-### Platform Support
-- **Windows**: Full support for Windows 10/11 (x64)
-- **macOS**: Native support for Apple Silicon (ARM64) Macs
-- **Linux**: Compatible with major distributions (Ubuntu, Fedora, etc.)
+## System Requirements
 
-## Quick Start
+### Minimum Requirements
+- **Operating System**: Windows 10+, macOS 10.15+, or Linux (Ubuntu 18.04+)
+- **Qt Version**: Qt 6.5.0 or later
+- **RAM**: 4GB minimum, 8GB recommended
+- **Storage**: 500MB available space
+- **Network**: Ethernet adapter for robot communication
 
-### Prerequisites
-- Qt 6.5.0 or later
-- C++17 compatible compiler
-- Git (for cloning QHotkey dependency)
-- Platform-specific dependencies (see [Building](#building))
+### Recommended Hardware
+- **CPU**: Multi-core processor (Intel i5/AMD Ryzen 5 or better)
+- **RAM**: 8GB or more
+- **Display**: 1920x1080 or higher resolution
+- **Network**: Gigabit Ethernet adapter
+- **Controllers**: Xbox/PlayStation controllers or FRC-approved joysticks
 
-### Installation
+## Installation
 
-#### Download Pre-built Binaries
-1. Go to the [Releases](https://github.com/thenetworkgrinch/yet-another-driver-station/releases) page
-2. Download the appropriate package for your platform
-3. Extract and run the application
-
-#### Build from Source
-```bash
-git clone https://github.com/thenetworkgrinch/yet-another-driver-station.git
-cd yet-another-driver-station
-
-# Clone QHotkey dependency
-mkdir -p thirdparty
-cd thirdparty
-git clone https://github.com/Skycoder42/QHotkey.git
-cd QHotkey
-git checkout 1.5.0
-cd ../..
-
-# Build
-qmake YetAnotherDriverStation.pro
-make
-```
-
-### First Run
-1. Launch the application
-2. Choose your connection mode:
-   - **Team Number**: Enter your 4-digit team number (1-9999)
-   - **IP Address**: Enter the robot's IP address directly
-3. Click "Connect" to establish communication with your robot
-4. The application will automatically save your settings for future sessions
-
-## Configuration
-
-### Connection Modes
-
-#### Team Number Mode
-- Traditional FRC connection using team numbers
-- Automatically tries multiple robot addresses:
-  - `10.TE.AM.2` (standard competition network)
-  - `172.22.11.2` (USB connection)
-  - `192.168.1.2` (Ethernet connection)
-- Supports mDNS discovery (`roboRIO-TEAM-FRC.local`)
-
-#### IP Address Mode
-- Direct connection to a specific IP address
-- Useful for custom network configurations
-- Supports any valid IPv4 address
-- Real-time IP address validation
-
-### Global Shortcuts
-Global shortcuts work system-wide, even when the application isn't focused:
-
-| Shortcut | Action | Description |
-|----------|--------|-------------|
-| `Space` | Emergency Stop | Immediately stops the robot |
-| `Enter` | Disable Robot | Safely disables the robot |
-| `Ctrl+E` | Enable Robot | Enables the robot (if not e-stopped) |
-
-Global shortcuts can be disabled in the settings if needed.
-
-### Dashboard Management
-The application supports multiple dashboard applications:
-- **Driver Station**: Built-in dashboard with diagnostics
-- **Glass**: WPILib's modern dashboard (auto-detected)
-- **Shuffleboard**: Official FRC dashboard
-- **SmartDashboard**: Legacy FRC dashboard
-- **Custom**: Add your own dashboard applications
-
-## Building
-
-### Dependencies
-
-#### All Platforms
-- Qt 6.5.0+ with QML and Network modules
-- Git (for QHotkey dependency)
+### Pre-built Releases
+Download the latest release for your platform from the [Releases](https://github.com/thenetworkgrinch/yet-another-driver-station/releases) page.
 
 #### Windows
+1. Download `yet-another-driver-station-windows.zip`
+2. Extract to your desired location
+3. Run `YetAnotherDriverStation.exe`
+
+#### macOS
+1. Download `yet-another-driver-station-macos.tar.gz`
+2. Extract and copy `YetAnotherDriverStation.app` to Applications
+3. Run the application (you may need to allow it in Security & Privacy settings)
+
+#### Linux
+1. Download `yet-another-driver-station-linux.tar.gz`
+2. Extract to your desired location
+3. Make the binary executable: `chmod +x YetAnotherDriverStation`
+4. Run `./YetAnotherDriverStation`
+
+### Building from Source
+
+#### Prerequisites
+- Qt 6.5.0 or later with QML support
+- CMake 3.16 or later
+- C++17 compatible compiler
+- Git
+
+#### Platform-specific Dependencies
+
+**Windows:**
 - Visual Studio 2019 or later
 - Windows SDK
 
-#### macOS
+**macOS:**
 - Xcode Command Line Tools
-- macOS 11.0+ (for ARM64 support)
+- macOS SDK
 
-#### Linux
-- GCC 9+ or Clang 10+
-- libudev-dev
-- libgl1-mesa-dev
-- libxkbcommon-dev
-- libx11-dev
-- libxtst-dev
+**Linux:**
+- Build essentials: `sudo apt-get install build-essential cmake`
+- Development libraries: `sudo apt-get install libudev-dev libgl1-mesa-dev libxkbcommon-dev libx11-dev libxtst-dev`
 
-### Build Instructions
+#### Build Steps
 
-#### Standard Build
-```bash
-# Clone the repository
-git clone https://github.com/thenetworkgrinch/yet-another-driver-station.git
-cd yet-another-driver-station
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/thenetworkgrinch/yet-another-driver-station.git
+   cd yet-another-driver-station
+   ```
 
-# Clone QHotkey dependency
-mkdir -p thirdparty
-cd thirdparty
-git clone https://github.com/Skycoder42/QHotkey.git
-cd QHotkey
-git checkout 1.5.0
-cd ../..
+2. **Build QHotkey dependency:**
+   
+   **Linux/macOS:**
+   ```bash
+   chmod +x scripts/build-qhotkey.sh
+   ./scripts/build-qhotkey.sh Release
+   ```
+   
+   **Windows (PowerShell):**
+   ```powershell
+   .\scripts\build-qhotkey.ps1 -BuildType Release
+   ```
 
-# Build QHotkey first (platform-specific project file will be created automatically)
-cd thirdparty/QHotkey
-qmake QHotkey.pro CONFIG+=release
-make
-cd ../..
+3. **Build the application:**
+   ```bash
+   qmake YetAnotherDriverStation.pro CONFIG+=release
+   make  # or 'nmake' on Windows
+   ```
 
-# Build main application
-qmake YetAnotherDriverStation.pro CONFIG+=release
-make
-```
+4. **Run the application:**
+   ```bash
+   ./build/release/YetAnotherDriverStation  # Linux/macOS
+   .\build\release\YetAnotherDriverStation.exe  # Windows
+   ```
 
-#### Feature Flags
+#### Build Configuration Options
+
 You can disable specific features during build:
 
 ```bash
-# Disable global shortcuts
-qmake CONFIG+=no_global_shortcuts
+# Disable all optional features
+qmake YetAnotherDriverStation.pro CONFIG+=release \
+    CONFIG+=no_fms_support \
+    CONFIG+=no_glass_integration \
+    CONFIG+=no_dashboard_management \
+    CONFIG+=no_practice_match \
+    CONFIG+=no_global_shortcuts
 
-# Disable FMS support
-qmake CONFIG+=no_fms_support
-
-# Disable dashboard management
-qmake CONFIG+=no_dashboard_management
-
-# Disable multiple features
-qmake CONFIG+=no_global_shortcuts CONFIG+=no_fms_support
-```
-
-Available feature flags:
-- `no_global_shortcuts`: Disables global hotkey functionality
-- `no_fms_support`: Removes FMS integration
-- `no_dashboard_management`: Disables external dashboard support
-- `no_practice_match`: Removes practice match features
-- `no_glass_integration`: Disables Glass dashboard integration
-
-### QHotkey Integration
-
-This project uses QHotkey for global shortcut functionality. The dependency is automatically managed:
-
-1. **Automatic Detection**: The build system checks for QHotkey in `thirdparty/QHotkey`
-2. **Platform-Specific Building**: Creates appropriate project files for each platform
-3. **Graceful Degradation**: If QHotkey is not found, global shortcuts are automatically disabled
-4. **Static Linking**: QHotkey is built as a static library and linked into the main application
-
-#### Manual QHotkey Setup
-If you need to set up QHotkey manually:
-
-```bash
-mkdir -p thirdparty
-cd thirdparty
-git clone https://github.com/Skycoder42/QHotkey.git
-cd QHotkey
-git checkout 1.5.0
-
-# The build system will automatically create the appropriate .pro file
-# and build QHotkey when you build the main application
+# Disable only global shortcuts
+qmake YetAnotherDriverStation.pro CONFIG+=release CONFIG+=no_global_shortcuts
 ```
 
 ## Usage
 
+### First Time Setup
+1. Launch the application
+2. Enter your team number in the settings
+3. Connect your robot via Ethernet
+4. Configure any controllers in the Controllers tab
+
 ### Basic Operation
-1. **Choose Connection Mode**: Select either Team Number or IP Address mode
-2. **Set Target**: Enter your team number (1-9999) or robot IP address
-3. **Connect**: Click the Connect button or use `Ctrl+R`
-4. **Monitor Status**: Watch the connection and robot status indicators
-5. **Control Robot**: Use the enable/disable buttons or global shortcuts
-6. **Emergency Stop**: Press `Space` or click the E-Stop button if needed
+1. **Enable Robot**: Click the "Enable" button or press Space
+2. **Disable Robot**: Click "Disable" or press Space again
+3. **Emergency Stop**: Press Enter or Ctrl+E for immediate stop
+4. **Mode Selection**: Choose Autonomous, Teleop, or Test mode
+5. **Monitor Status**: Watch the status indicators for robot and network health
 
-### Connection Modes
+### Global Shortcuts
+These shortcuts work system-wide, even when the application isn't focused:
+- **Space**: Toggle robot enable/disable
+- **Enter**: Emergency stop (disable robot)
+- **Ctrl+E**: Emergency stop (alternative)
 
-#### Team Number Mode
-- Enter your 4-digit FRC team number
-- Application automatically tries multiple connection methods
-- Supports standard FRC network configurations
-- Ideal for competition and standard practice environments
+### Practice Matches
+1. Go to the Operations tab
+2. Click "Start Practice Match"
+3. The timer will automatically cycle through Autonomous and Teleop periods
+4. Use this to simulate real match conditions
 
-#### IP Address Mode
-- Enter the robot's IP address directly (e.g., `10.0.0.2`)
-- Real-time validation ensures proper IP format
-- Useful for custom network setups or development environments
-- Supports any valid IPv4 address
+## Configuration
 
-### Advanced Features
+### Team Settings
+- Set your team number in Settings → Team Configuration
+- The application will automatically calculate robot IP addresses
 
-#### Match Logging
-- Logs are automatically organized by match type and number
-- Practice matches are logged separately
-- All logs include timestamps, robot status, and network events
-- Crash recovery ensures no log data is lost
+### Network Configuration
+- Default robot IP: `10.TE.AM.2` (where TEAM is your team number)
+- FMS IP: Automatically detected during competitions
+- Dashboard ports: Configurable per dashboard type
 
-#### Network Diagnostics
-- Real-time ping latency monitoring
-- Packet loss statistics
-- Connection quality indicators
-- Network interface information
+### Controller Configuration
+- Controllers are automatically detected when plugged in
+- Mapping can be customized in the Controllers tab
+- Supports Xbox, PlayStation, and most HID-compliant controllers
 
-#### Dashboard Integration
-- Launch external dashboards directly from the application
-- Monitor dashboard process status
-- Automatic path detection for common dashboards
-- Custom dashboard configuration support
+### Dashboard Integration
+The application supports multiple dashboard types:
+- **SmartDashboard**: Classic LabVIEW-based dashboard
+- **Shuffleboard**: Modern Java-based dashboard
+- **Glass**: Web-based dashboard with advanced features
+- **Custom**: Support for team-specific dashboards
 
 ## Troubleshooting
 
 ### Common Issues
 
-#### Robot Not Found
-- Verify team number is correct (1-9999) or IP address is valid
-- Check network connection (Ethernet, WiFi, or USB)
+**Robot not connecting:**
+- Verify team number is correct
+- Check Ethernet cable connection
 - Ensure robot is powered on and running code
-- Try switching between connection modes
-- In team number mode, the app tries multiple addresses automatically
+- Check firewall settings
 
-#### Global Shortcuts Not Working
-- Check if global shortcuts are enabled in settings
-- Verify no other applications are using the same shortcuts
-- On Linux, ensure proper permissions for input devices
-- Try running as administrator (Windows) or with sudo (Linux)
-- If QHotkey failed to build, global shortcuts will be automatically disabled
+**Controllers not detected:**
+- Try unplugging and reconnecting the controller
+- Check if the controller works in other applications
+- Verify USB cable is functional
 
-#### Dashboard Won't Launch
-- Verify dashboard path is correctly configured
-- Check that the dashboard executable exists and is accessible
-- Ensure proper permissions to execute the dashboard
-- Check dashboard-specific requirements and dependencies
+**Global shortcuts not working:**
+- Check if another application is using the same shortcuts
+- On Linux, ensure X11 is running (Wayland support is limited)
+- Try running the application as administrator (Windows only)
 
-#### Build Issues
-- Ensure Qt 6.5.0+ is installed with QML and Network modules
-- Verify QHotkey was cloned correctly in `thirdparty/QHotkey`
-- Check that all platform-specific dependencies are installed
-- Try building with feature flags disabled if encountering issues
+**Build failures:**
+- Ensure all dependencies are installed
+- Check Qt version compatibility
+- Verify CMake and compiler versions
+- Try cleaning the build directory
 
-### Log Files
-Log files are stored in:
-- **Windows**: `%APPDATA%/Yet Another Driver Station/logs/`
-- **macOS**: `~/Library/Application Support/Yet Another Driver Station/logs/`
-- **Linux**: `~/.local/share/Yet Another Driver Station/logs/`
+### Getting Help
+- Check the [Issues](https://github.com/thenetworkgrinch/yet-another-driver-station/issues) page
+- Join our [Discord community](https://discord.gg/your-invite)
+- Email support: support@your-domain.com
 
-## Contributing
+## Development
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+### Project Structure
+```
+yet-another-driver-station/
+├── backend/                 # C++ backend code
+│   ├── core/               # Core utilities and logging
+│   ├── comms/              # Robot communication
+│   ├── controllers/        # Controller handling
+│   ├── managers/           # System managers
+│   └── fms/                # FMS integration
+├── qml/                    # QML user interface
+├── dashboards/             # Dashboard configurations
+├── scripts/                # Build and utility scripts
+├── thirdparty/            # Third-party dependencies
+└── .github/               # CI/CD workflows
+```
 
-### Development Setup
+### Contributing
 1. Fork the repository
-2. Clone QHotkey dependency: `git clone https://github.com/Skycoder42/QHotkey.git thirdparty/QHotkey`
-3. Create a feature branch
-4. Make your changes
-5. Test on multiple platforms if possible
-6. Submit a pull request
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
 ### Code Style
-- Follow Qt/C++ coding conventions
-- Use meaningful variable and function names
-- Add documentation for public APIs
-- Include unit tests for new features
-- Test both connection modes when making networking changes
+- C++: Follow Qt coding conventions
+- QML: Use Qt Quick best practices
+- Comments: Document public APIs and complex logic
+- Testing: Add unit tests for new functionality
 
 ## License
 
@@ -315,17 +253,25 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-- **WPILib Team**: For the FRC protocol specifications and reference implementations
-- **Qt Project**: For the excellent Qt framework
-- **FRC Community**: For feedback, testing, and contributions
-- **Skycoder42**: For the QHotkey library enabling global shortcuts
+- **FIRST Robotics Competition** for the protocol specifications
+- **Qt Project** for the excellent cross-platform framework
+- **QHotkey** library for global shortcut support
+- **FRC Community** for feedback and contributions
 
-## Support
+## Roadmap
 
-- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/thenetworkgrinch/yet-another-driver-station/issues)
-- **Discussions**: Join the conversation on [GitHub Discussions](https://github.com/thenetworkgrinch/yet-another-driver-station/discussions)
-- **Discord**: Join our community Discord server (link in repository)
+### Version 2025.2.0
+- [ ] Advanced telemetry visualization
+- [ ] Plugin system for custom extensions
+- [ ] Enhanced logging and replay capabilities
+- [ ] Mobile companion app
+
+### Version 2025.3.0
+- [ ] Machine learning-based network optimization
+- [ ] Advanced robot diagnostics
+- [ ] Team collaboration features
+- [ ] Cloud-based configuration sync
 
 ---
 
-**Yet Another Driver Station** - Because every team deserves reliable, modern driver station software with flexible connection options.
+**Built with ❤️ for the FRC Community**
