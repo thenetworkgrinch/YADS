@@ -125,12 +125,7 @@ jobs:
 
     - name: Configure CMake
       run: |
-        cmake -B build -S . \
-          -DENABLE_GLOBAL_SHORTCUTS=ON \
-          -DENABLE_FMS_SUPPORT=ON \
-          -DENABLE_GLASS_INTEGRATION=ON \
-          -DENABLE_DASHBOARD_MANAGEMENT=ON \
-          -DENABLE_PRACTICE_MATCH=ON
+        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_arch }} -DENABLE_GLOBAL_SHORTCUTS=ON -DENABLE_FMS_SUPPORT=ON -DENABLE_GLASS_INTEGRATION=ON -DENABLE_DASHBOARD_MANAGEMENT=ON -DENABLE_PRACTICE_MATCH=ON
 
     - name: Build
       run: |
