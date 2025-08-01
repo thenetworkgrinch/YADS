@@ -130,7 +130,6 @@ coverage/
 *.dmp
 
 # Core dumps
-core
 core.*
 
 # Crash logs
