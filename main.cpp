@@ -8,85 +8,105 @@
 #include "backend/core/logger.h"
 #include "backend/core/constants.h"
 #include "backend/robotstate.h"
+#include "backend/managers/battery_manager.h"
+#include "backend/managers/practice_match_manager.h"
+#include "backend/managers/network_manager.h"
+#include "backend/controllers/controllerhidhandler.h"
 
 #ifdef QHOTKEY_AVAILABLE
 #include <QHotkey>
 #endif
 
+Q_LOGGING_CATEGORY(main, "main")
+
 class GlobalShortcutManager : public QObject
 {
     Q_OBJECT
-
+    
 public:
-    explicit GlobalShortcutManager(QObject* parent = nullptr)
-        : QObject(parent)
+    explicit GlobalShortcutManager(QObject* parent = nullptr) : QObject(parent)
     {
 #ifdef QHOTKEY_AVAILABLE
-        setupShortcuts();
+        setupGlobalShortcuts();
 #else
-        LOG_WARNING("GlobalShortcuts", "QHotkey not available, global shortcuts disabled");
+        LOG_WARNING("Global shortcuts not available - QHotkey not compiled");
 #endif
     }
-
+    
 private slots:
     void onEmergencyStop()
     {
-        LOG_INFO("GlobalShortcuts", "Emergency stop triggered");
-        emit emergencyStopTriggered();
+        LOG_INFO("Emergency stop triggered via global shortcut");
+        emit emergencyStopRequested();
     }
-
-    void onEnableDisable()
+    
+    void onToggleEnable()
     {
-        LOG_INFO("GlobalShortcuts", "Enable/Disable triggered");
-        emit enableDisableTriggered();
+        LOG_INFO("Toggle enable triggered via global shortcut");
+        emit toggleEnableRequested();
     }
-
+    
     void onModeAutonomous()
     {
-        LOG_INFO("GlobalShortcuts", "Autonomous mode triggered");
-        emit modeChanged(static_cast<int>(Constants::RobotMode::Autonomous));
+        LOG_INFO("Autonomous mode triggered via global shortcut");
+        emit modeChangeRequested(Constants::RobotMode::Autonomous);
     }
-
+    
     void onModeTeleop()
     {
-        LOG_INFO("GlobalShortcuts", "Teleop mode triggered");
-        emit modeChanged(static_cast<int>(Constants::RobotMode::Teleop));
+        LOG_INFO("Teleop mode triggered via global shortcut");
+        emit modeChangeRequested(Constants::RobotMode::Teleop);
     }
-
+    
     void onModeTest()
     {
-        LOG_INFO("GlobalShortcuts", "Test mode triggered");
-        emit modeChanged(static_cast<int>(Constants::RobotMode::Test));
+        LOG_INFO("Test mode triggered via global shortcut");
+        emit modeChangeRequested(Constants::RobotMode::Test);
     }
-
+    
 signals:
-    void emergencyStopTriggered();
-    void enableDisableTriggered();
-    void modeChanged(int mode);
-
+    void emergencyStopRequested();
+    void toggleEnableRequested();
+    void modeChangeRequested(Constants::RobotMode mode);
+    
 private:
-    void setupShortcuts()
+    void setupGlobalShortcuts()
     {
 #ifdef QHOTKEY_AVAILABLE
-        // Emergency stop
+        // Emergency stop shortcuts
         auto* emergencyStopHotkey = new QHotkey(QKeySequence(Constants::Shortcuts::EMERGENCY_STOP), true, this);
-        connect(emergencyStopHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onEmergencyStop);
-
-        // Enable/Disable
-        auto* enableDisableHotkey = new QHotkey(QKeySequence(Constants::Shortcuts::ENABLE_DISABLE), true, this);
-        connect(enableDisableHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onEnableDisable);
-
+        auto* emergencyStopAltHotkey = new QHotkey(QKeySequence(Constants::Shortcuts::EMERGENCY_STOP_ALT), true, this);
+        
+        // Toggle enable shortcut
+        auto* toggleEnableHotkey = new QHotkey(QKeySequence(Constants::Shortcuts::TOGGLE_ENABLE), true, this);
+        
         // Mode shortcuts
-        auto* autoHotkey = new QHotkey(QKeySequence(Constants::Shortcuts::MODE_AUTONOMOUS), true, this);
-        connect(autoHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onModeAutonomous);
-
-        auto* teleopHotkey = new QHotkey(QKeySequence(Constants::Shortcuts::MODE_TELEOP), true, this);
-        connect(teleopHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onModeTeleop);
-
-        auto* testHotkey = new QHotkey(QKeySequence(Constants::Shortcuts::MODE_TEST), true, this);
-        connect(testHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onModeTest);
-
-        LOG_INFO("GlobalShortcuts", "Global shortcuts initialized successfully");
+        auto* modeAutoHotkey = new QHotkey(QKeySequence(Constants::Shortcuts::MODE_AUTONOMOUS), true, this);
+        auto* modeTeleopHotkey = new QHotkey(QKeySequence(Constants::Shortcuts::MODE_TELEOP), true, this);
+        auto* modeTestHotkey = new QHotkey(QKeySequence(Constants::Shortcuts::MODE_TEST), true, this);
+        
+        // Connect signals
+        connect(emergencyStopHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onEmergencyStop);
+        connect(emergencyStopAltHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onEmergencyStop);
+        connect(toggleEnableHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onToggleEnable);
+        connect(modeAutoHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onModeAutonomous);
+        connect(modeTeleopHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onModeTeleop);
+        connect(modeTestHotkey, &QHotkey::activated, this, &GlobalShortcutManager::onModeTest);
+        
+        // Verify registration
+        if (emergencyStopHotkey->isRegistered()) {
+            LOG_INFO("Emergency stop global shortcut registered: %1", Constants::Shortcuts::EMERGENCY_STOP);
+        } else {
+            LOG_WARNING("Failed to register emergency stop shortcut: %1", Constants::Shortcuts::EMERGENCY_STOP);
+        }
+        
+        if (toggleEnableHotkey->isRegistered()) {
+            LOG_INFO("Toggle enable global shortcut registered: %1", Constants::Shortcuts::TOGGLE_ENABLE);
+        } else {
+            LOG_WARNING("Failed to register toggle enable shortcut: %1", Constants::Shortcuts::TOGGLE_ENABLE);
+        }
+        
+        LOG_INFO("Global shortcuts initialized");
 #endif
     }
 };
@@ -103,46 +123,71 @@ int main(int argc, char *argv[])
     
     // Initialize logger
     Logger* logger = Logger::instance();
-    logger->setLogLevel(Logger::LogLevel::Debug);
-    logger->setLogToFile(true);
-    logger->setLogToConsole(true);
+    logger->setLogLevel(Constants::LogLevel::Info);
+    logger->setFileLogging(true);
+    logger->setConsoleLogging(true);
     
-    LOG_INFO("Application", QString("Starting %1 v%2").arg(Constants::APP_NAME, Constants::APP_VERSION));
+    LOG_INFO("=== %1 v%2 Starting ===", Constants::APP_NAME, Constants::APP_VERSION);
+    LOG_INFO("Qt Version: %1", QT_VERSION_STR);
+    LOG_INFO("Build Date: %1 %2", __DATE__, __TIME__);
     
-    // Create application directories
-    QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir().mkpath(QDir(appDataDir).absoluteFilePath(Constants::Paths::CONFIG_DIR));
-    QDir().mkpath(QDir(appDataDir).absoluteFilePath(Constants::Paths::DASHBOARD_DIR));
-    QDir().mkpath(QDir(appDataDir).absoluteFilePath(Constants::Paths::CACHE_DIR));
+#ifdef QHOTKEY_AVAILABLE
+    LOG_INFO("QHotkey support: Available");
+#else
+    LOG_INFO("QHotkey support: Not available");
+#endif
     
-    // Initialize robot state
-    RobotState robotState;
+    // Create core managers
+    RobotState* robotState = new RobotState(&app);
+    BatteryManager* batteryManager = new BatteryManager(&app);
+    PracticeMatchManager* practiceMatchManager = new PracticeMatchManager(&app);
+    NetworkManager* networkManager = new NetworkManager(&app);
+    ControllerHIDHandler* controllerHandler = new ControllerHIDHandler(&app);
     
-    // Initialize global shortcuts
-    GlobalShortcutManager shortcutManager;
-    QObject::connect(&shortcutManager, &GlobalShortcutManager::emergencyStopTriggered,
-                     &robotState, &RobotState::emergencyStop);
-    QObject::connect(&shortcutManager, &GlobalShortcutManager::enableDisableTriggered,
-                     &robotState, &RobotState::toggleEnabled);
+    // Create global shortcut manager
+    GlobalShortcutManager* shortcutManager = new GlobalShortcutManager(&app);
     
-    // Set up QML engine
+    // Connect global shortcuts to robot state
+    QObject::connect(shortcutManager, &GlobalShortcutManager::emergencyStopRequested,
+                     robotState, &RobotState::emergencyStop);
+    QObject::connect(shortcutManager, &GlobalShortcutManager::toggleEnableRequested,
+                     robotState, &RobotState::toggleEnabled);
+    QObject::connect(shortcutManager, QOverload<Constants::RobotMode>::of(&GlobalShortcutManager::modeChangeRequested),
+                     robotState, &RobotState::setMode);
+    
+    // Connect managers
+    QObject::connect(robotState, &RobotState::batteryVoltageChanged,
+                     batteryManager, &BatteryManager::updateBatteryVoltage);
+    QObject::connect(practiceMatchManager, &PracticeMatchManager::modeChangeRequested,
+                     robotState, &RobotState::setMode);
+    QObject::connect(practiceMatchManager, &PracticeMatchManager::enableRequested,
+                     robotState, &RobotState::setEnabled);
+    
+    // Setup QML engine
     QQmlApplicationEngine engine;
     
-    // Register types
+    // Register types with QML
+    qmlRegisterUncreatableType<Constants>("YetAnotherDriverStation", 1, 0, "Constants", "Constants is a namespace");
     qmlRegisterType<RobotState>("YetAnotherDriverStation", 1, 0, "RobotState");
-    qmlRegisterUncreatableMetaObject(Constants::staticMetaObject, "YetAnotherDriverStation", 1, 0, "Constants", "Access to enums & constants only");
+    qmlRegisterType<BatteryManager>("YetAnotherDriverStation", 1, 0, "BatteryManager");
+    qmlRegisterType<PracticeMatchManager>("YetAnotherDriverStation", 1, 0, "PracticeMatchManager");
+    qmlRegisterType<NetworkManager>("YetAnotherDriverStation", 1, 0, "NetworkManager");
+    qmlRegisterType<ControllerHIDHandler>("YetAnotherDriverStation", 1, 0, "ControllerHIDHandler");
     
-    // Expose objects to QML
-    engine.rootContext()->setContextProperty("robotState", &robotState);
+    // Expose instances to QML
+    engine.rootContext()->setContextProperty("robotState", robotState);
+    engine.rootContext()->setContextProperty("batteryManager", batteryManager);
+    engine.rootContext()->setContextProperty("practiceMatchManager", practiceMatchManager);
+    engine.rootContext()->setContextProperty("networkManager", networkManager);
+    engine.rootContext()->setContextProperty("controllerHandler", controllerHandler);
     engine.rootContext()->setContextProperty("logger", logger);
-    engine.rootContext()->setContextProperty("shortcutManager", &shortcutManager);
     
     // Load main QML file
     const QUrl url(QStringLiteral("qrc:/main.qml"));
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreated,
                      &app, [url](QObject *obj, const QUrl &objUrl) {
         if (!obj && url == objUrl) {
-            LOG_CRITICAL("Application", "Failed to load main QML file");
+            LOG_CRITICAL("Failed to load main QML file");
             QCoreApplication::exit(-1);
         }
     }, Qt::QueuedConnection);
@@ -150,15 +195,19 @@ int main(int argc, char *argv[])
     engine.load(url);
     
     if (engine.rootObjects().isEmpty()) {
-        LOG_CRITICAL("Application", "No root objects found in QML engine");
+        LOG_CRITICAL("No root objects found in QML engine");
         return -1;
     }
     
-    LOG_INFO("Application", "Application started successfully");
+    LOG_INFO("Application initialized successfully");
+    LOG_INFO("Main window loaded, starting event loop");
     
+    // Start the application
     int result = app.exec();
     
-    LOG_INFO("Application", QString("Application exiting with code %1").arg(result));
+    LOG_INFO("Application shutting down with exit code: %1", result);
+    LOG_INFO("=== %1 Shutdown Complete ===", Constants::APP_NAME);
+    
     return result;
 }
 
