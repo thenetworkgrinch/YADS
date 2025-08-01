@@ -1,6 +1,6 @@
 # Yet Another Driver Station (YADS)
 
-[![Build Status](https://github.com/thenetworkgrinch/yet-another-driver-station/workflows/Build%20and%20Release/badge.svg)](https://github.com/thenetworkgrinch/yet-another-driver-station/actions)
+[![Build Status](https://github.com/thenetworkgrinch/YADS/workflows/Build%20and%20Release/badge.svg)](https://github.com/thenetworkgrinch/YADS/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Qt Version](https://img.shields.io/badge/Qt-6.5%2B-green.svg)](https://www.qt.io/)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue.svg)](#supported-platforms)
@@ -90,7 +90,7 @@ Global shortcuts work system-wide, even when the application isn't focused:
 
 ### Option 1: Pre-built Releases (Recommended)
 
-Download the latest release for your platform from the [GitHub Releases](https://github.com/thenetworkgrinch/yet-another-driver-station/releases) page:
+Download the latest release for your platform from the [GitHub Releases](https://github.com/thenetworkgrinch/YADS/releases) page:
 
 **Windows:**
 1. Download `YetAnotherDriverStation-Windows.zip`
@@ -158,16 +158,16 @@ The fastest way to build YADS is using the provided build scripts:
 
 #### Linux/macOS
 ```bash
-git clone https://github.com/thenetworkgrinch/yet-another-driver-station.git
-cd yet-another-driver-station
+git clone https://github.com/thenetworkgrinch/YADS.git
+cd YADS
 chmod +x scripts/build.sh
 ./scripts/build.sh
 ```
 
 #### Windows (PowerShell)
 ```powershell
-git clone https://github.com/thenetworkgrinch/yet-another-driver-station.git
-cd yet-another-driver-station
+git clone https://github.com/thenetworkgrinch/YADS.git
+cd YADS
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\scripts\build.ps1
 ```
@@ -176,8 +176,8 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 #### Step 1: Clone Repository
 ```bash
-git clone https://github.com/thenetworkgrinch/yet-another-driver-station.git
-cd yet-another-driver-station
+git clone https://github.com/thenetworkgrinch/YADS.git
+cd YADS
 ```
 
 #### Step 2: Clone QHotkey Dependency
@@ -359,7 +359,7 @@ cmake --build . --config Debug
 
 ### Project Structure
 ```
-yet-another-driver-station/
+YADS/
 ├── CMakeLists.txt              # Main CMake configuration
 ├── main.cpp                    # Application entry point
 ├── backend/                    # C++ backend implementation
